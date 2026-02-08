@@ -1,0 +1,83 @@
+%% Architecture Flow Diagram
+%% Request/Response flow through all layers using Drizzle ORM
+
+flowchart TD
+    Client["HTTP Client"]
+    
+    subgraph "Entry Point"
+        Elysia["Elysia Server<br/>(index.ts)"]
+    end
+    
+    subgraph "Controller Layer"
+        UserCtrl["User Controller<br/>/users/*"]
+        BudgetCtrl["Budget Controller<br/>/budgets/*"]
+        MovementCtrl["Movement Controller<br/>/movements/*"]
+    end
+    
+    subgraph "Service Layer"
+        UserSvc["User Service<br/>Business Logic"]
+        BudgetSvc["Budget Service<br/>Business Logic"]
+        MovementSvc["Movement Service<br/>Business Logic"]
+    end
+    
+    subgraph "Repository Layer"
+        UserRepo["User Repository<br/>Drizzle Queries"]
+        BudgetRepo["Budget Repository<br/>Drizzle Queries"]
+        MovementRepo["Movement Repository<br/>Drizzle Queries"]
+    end
+    
+    subgraph "Domain Layer"
+        UserEntity["User Entity"]
+        BudgetEntity["Budget Entity"]
+        MovementEntity["Movement Entity"]
+    end
+    
+    subgraph "Infrastructure"
+        DBConn["Drizzle DB Connection<br/>(src/db)"]
+        Schema["Drizzle Schema<br/>(Type-safe tables)"]
+        EnvConfig["Env Config<br/>(Singleton)"]
+        DB[("PostgreSQL<br/>Database")]
+    end
+    
+    %% Request Flow
+    Client -->|"HTTP Request"| Elysia
+    Elysia -->|"Route to"| UserCtrl
+    Elysia -->|"Route to"| BudgetCtrl
+    Elysia -->|"Route to"| MovementCtrl
+    
+    UserCtrl -->|"1. Validate & Call"| UserSvc
+    BudgetCtrl -->|"1. Validate & Call"| BudgetSvc
+    MovementCtrl -->|"1. Validate & Call"| MovementSvc
+    
+    UserSvc -->|"2. Call Repository"| UserRepo
+    BudgetSvc -->|"2. Call Repository"| BudgetRepo
+    MovementSvc -->|"2. Call Repository"| MovementRepo
+    
+    UserRepo -->|"3. Use Drizzle"| DBConn
+    BudgetRepo -->|"3. Use Drizzle"| DBConn
+    MovementRepo -->|"3. Use Drizzle"| DBConn
+    
+    DBConn -->|"4. Type-safe Query"| Schema
+    Schema -->|"5. SQL Query"| DB
+    
+    UserRepo -.->|"Maps to"| UserEntity
+    BudgetRepo -.->|"Maps to"| BudgetEntity
+    MovementRepo -.->|"Maps to"| MovementEntity
+    
+    EnvConfig -.->|"Config Values"| DBConn
+    
+    %% Response Flow
+    DB -->|"6. Data"| Schema
+    Schema -->|"7. Typed Result"| DBConn
+    DBConn -->|"8. Entity"| UserRepo
+    UserRepo -->|"9. Return"| UserSvc
+    UserSvc -->|"10. Transform to DTO"| UserCtrl
+    UserCtrl -->|"11. JSON Response"| Elysia
+    Elysia -->|"HTTP Response"| Client
+    
+    style Client fill:#e1f5ff
+    style Elysia fill:#fff4e6
+    style DBConn fill:#ffe6f0
+    style Schema fill:#e8f5e9
+    style DB fill:#e8f5e9
+    style EnvConfig fill:#fff3e0

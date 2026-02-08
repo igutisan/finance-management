@@ -1,0 +1,71 @@
+%% Layer Interaction Diagram
+%% Shows dependencies and allowed interactions between layers
+
+flowchart TB
+    subgraph "HTTP Layer"
+        HTTP["Elysia Framework"]
+    end
+    
+    subgraph "Presentation Layer"
+        Controllers["Controllers<br/>- User Controller<br/>- Budget Controller<br/>- Movement Controller"]
+    end
+    
+    subgraph "Business Logic Layer"
+        Services["Services<br/>- User Service<br/>- Budget Service<br/>- Movement Service"]
+    end
+    
+    subgraph "Data Access Layer"
+        Repositories["Repositories<br/>- User Repository<br/>- Budget Repository<br/>- Movement Repository"]
+    end
+    
+    subgraph "ORM Layer"
+        Drizzle["Drizzle ORM<br/>- Schema Definitions<br/>- Type-safe Queries<br/>- Transactions"]
+    end
+    
+    subgraph "Domain Layer"
+        Entities["Entities<br/>- User Entity<br/>- Budget Entity<br/>- Movement Entity"]
+    end
+    
+    subgraph "Data Transfer"
+        DTOs["DTOs<br/>- Request DTOs<br/>- Response DTOs"]
+    end
+    
+    subgraph "Configuration Layer"
+        Config["Config (Singleton)<br/>- Env Config"]
+        DBConn["Database Connection<br/>- Drizzle Instance"]
+    end
+    
+    %% Dependencies
+    HTTP -->|"Routes"| Controllers
+    Controllers -->|"Depends on"| Services
+    Controllers -->|"Uses"| DTOs
+    
+    Services -->|"Depends on"| Repositories
+    Services -->|"Uses"| DTOs
+    Services -->|"Transforms"| Entities
+    Services -->|"Transactions"| Drizzle
+    
+    Repositories -->|"Uses"| Drizzle
+    Repositories -->|"Returns"| Entities
+    
+    Drizzle -->|"Schema"| Entities
+    Drizzle -->|"Uses"| DBConn
+    
+    DBConn -->|"Uses"| Config
+    
+    DTOs -.->|"Maps to"| Entities
+    
+    %% Layer rules
+    style Controllers fill:#e3f2fd
+    style Services fill:#f3e5f5
+    style Repositories fill:#e8f5e9
+    style Drizzle fill:#ffe6f0
+    style Entities fill:#fff3e0
+    style DTOs fill:#fce4ec
+    style Config fill:#fff9c4
+    style DBConn fill:#e1f5ff
+    
+    %% Notes
+    note1["✅ Controllers call Services<br/>✅ Services use Repositories<br/>✅ Repositories use Drizzle<br/>✅ Drizzle handles transactions<br/>❌ Controllers cannot call Repositories directly<br/>❌ Services cannot use Drizzle directly (use repos)"]
+    
+    note1 -.-> Controllers

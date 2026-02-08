@@ -1,0 +1,1471 @@
+openapi: 3.0.3
+info:
+  title: Personal Finance Management API
+  description: |
+    Backend API para aplicación de finanzas personales que permite a los usuarios 
+    gestionar presupuestos, movimientos financieros y obtener análisis de sus gastos.
+    
+    **Características principales:**
+    - Gestión de usuarios con autenticación JWT
+    - CRUD completo de presupuestos
+    - Registro y seguimiento de movimientos financieros (ingresos, gastos, transferencias)
+    - Análisis y reportes financieros
+    - Filtros avanzados y paginación
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api@personalfinance.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.personalfinance.com/v1
+    description: Production server
+  - url: https://staging-api.personalfinance.com/v1
+    description: Staging server
+  - url: http://localhost:8000/v1
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: Endpoints de autenticación y registro
+  - name: Users
+    description: Gestión de usuarios
+  - name: Budgets
+    description: Gestión de presupuestos
+  - name: Movements
+    description: Gestión de movimientos financieros
+  - name: Analytics
+    description: Análisis y reportes financieros
+
+security:
+  - BearerAuth: []
+
+paths:
+  # ============================================================================
+  # AUTHENTICATION
+  # ============================================================================
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrar nuevo usuario
+      description: Crea una nueva cuenta de usuario en el sistema
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegistrationRequest'
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: El email ya está registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Iniciar sesión
+      description: Autentica un usuario y retorna un token JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refrescar token
+      description: Genera un nuevo access token usando el refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Token refrescado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================================
+  # USERS
+  # ============================================================================
+  /users/me:
+    get:
+      tags:
+        - Users
+      summary: Obtener perfil del usuario actual
+      description: Retorna la información del usuario autenticado
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags:
+        - Users
+      summary: Actualizar perfil del usuario
+      description: Actualiza la información del usuario autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: Usuario actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      tags:
+        - Users
+      summary: Eliminar cuenta de usuario
+      description: Elimina permanentemente la cuenta del usuario autenticado
+      responses:
+        '204':
+          description: Usuario eliminado exitosamente
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================================
+  # BUDGETS
+  # ============================================================================
+  /budgets:
+    get:
+      tags:
+        - Budgets
+      summary: Listar presupuestos
+      description: Obtiene todos los presupuestos del usuario autenticado con paginación y filtros
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: is_active
+          in: query
+          description: Filtrar por presupuestos activos o inactivos
+          schema:
+            type: boolean
+        - name: category
+          in: query
+          description: Filtrar por categoría
+          schema:
+            type: string
+            example: "Alimentación"
+        - name: start_date_from
+          in: query
+          description: Filtrar presupuestos que inician desde esta fecha
+          schema:
+            type: string
+            format: date
+        - name: start_date_to
+          in: query
+          description: Filtrar presupuestos que inician hasta esta fecha
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Lista de presupuestos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Budgets
+      summary: Crear presupuesto
+      description: Crea un nuevo presupuesto para el usuario autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetCreateRequest'
+      responses:
+        '201':
+          description: Presupuesto creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /budgets/{budget_id}:
+    get:
+      tags:
+        - Budgets
+      summary: Obtener presupuesto por ID
+      description: Retorna los detalles de un presupuesto específico
+      parameters:
+        - $ref: '#/components/parameters/BudgetIdParam'
+      responses:
+        '200':
+          description: Detalles del presupuesto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Budgets
+      summary: Actualizar presupuesto completo
+      description: Actualiza todos los campos de un presupuesto
+      parameters:
+        - $ref: '#/components/parameters/BudgetIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetUpdateRequest'
+      responses:
+        '200':
+          description: Presupuesto actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Budgets
+      summary: Actualizar presupuesto parcialmente
+      description: Actualiza campos específicos de un presupuesto
+      parameters:
+        - $ref: '#/components/parameters/BudgetIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetPatchRequest'
+      responses:
+        '200':
+          description: Presupuesto actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Budgets
+      summary: Eliminar presupuesto
+      description: Elimina un presupuesto específico
+      parameters:
+        - $ref: '#/components/parameters/BudgetIdParam'
+      responses:
+        '204':
+          description: Presupuesto eliminado exitosamente
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /budgets/{budget_id}/summary:
+    get:
+      tags:
+        - Budgets
+      summary: Obtener resumen del presupuesto
+      description: Retorna un resumen con el total gastado, disponible y porcentaje de uso
+      parameters:
+        - $ref: '#/components/parameters/BudgetIdParam'
+      responses:
+        '200':
+          description: Resumen del presupuesto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetSummaryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # MOVEMENTS
+  # ============================================================================
+  /movements:
+    get:
+      tags:
+        - Movements
+      summary: Listar movimientos
+      description: Obtiene todos los movimientos del usuario con filtros y paginación
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: type
+          in: query
+          description: Filtrar por tipo de movimiento
+          schema:
+            $ref: '#/components/schemas/MovementType'
+        - name: budget_id
+          in: query
+          description: Filtrar por presupuesto
+          schema:
+            type: string
+            format: uuid
+        - name: category
+          in: query
+          description: Filtrar por categoría
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          description: Fecha de inicio del rango
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          description: Fecha de fin del rango
+          schema:
+            type: string
+            format: date
+        - name: min_amount
+          in: query
+          description: Monto mínimo
+          schema:
+            type: number
+            format: decimal
+        - name: max_amount
+          in: query
+          description: Monto máximo
+          schema:
+            type: number
+            format: decimal
+        - name: tags
+          in: query
+          description: Filtrar por tags (separados por coma)
+          schema:
+            type: string
+            example: "comida,restaurante"
+        - name: sort_by
+          in: query
+          description: Campo por el cual ordenar
+          schema:
+            type: string
+            enum: [date, amount, created_at]
+            default: date
+        - name: sort_order
+          in: query
+          description: Orden ascendente o descendente
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Lista de movimientos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Movements
+      summary: Crear movimiento
+      description: Registra un nuevo movimiento financiero
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovementCreateRequest'
+      responses:
+        '201':
+          description: Movimiento creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /movements/{movement_id}:
+    get:
+      tags:
+        - Movements
+      summary: Obtener movimiento por ID
+      description: Retorna los detalles de un movimiento específico
+      parameters:
+        - $ref: '#/components/parameters/MovementIdParam'
+      responses:
+        '200':
+          description: Detalles del movimiento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Movements
+      summary: Actualizar movimiento completo
+      description: Actualiza todos los campos de un movimiento
+      parameters:
+        - $ref: '#/components/parameters/MovementIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovementUpdateRequest'
+      responses:
+        '200':
+          description: Movimiento actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Movements
+      summary: Actualizar movimiento parcialmente
+      description: Actualiza campos específicos de un movimiento
+      parameters:
+        - $ref: '#/components/parameters/MovementIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovementPatchRequest'
+      responses:
+        '200':
+          description: Movimiento actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MovementResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Movements
+      summary: Eliminar movimiento
+      description: Elimina un movimiento específico
+      parameters:
+        - $ref: '#/components/parameters/MovementIdParam'
+      responses:
+        '204':
+          description: Movimiento eliminado exitosamente
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================================
+  # ANALYTICS
+  # ============================================================================
+  /analytics/summary:
+    get:
+      tags:
+        - Analytics
+      summary: Resumen financiero general
+      description: Retorna un resumen con totales de ingresos, gastos y balance
+      parameters:
+        - name: date_from
+          in: query
+          required: true
+          description: Fecha de inicio del período
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          description: Fecha de fin del período
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Resumen financiero
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/by-category:
+    get:
+      tags:
+        - Analytics
+      summary: Análisis por categoría
+      description: Retorna el desglose de gastos e ingresos por categoría
+      parameters:
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: type
+          in: query
+          description: Filtrar por tipo de movimiento
+          schema:
+            $ref: '#/components/schemas/MovementType'
+      responses:
+        '200':
+          description: Análisis por categoría
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryAnalyticsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /analytics/trends:
+    get:
+      tags:
+        - Analytics
+      summary: Tendencias temporales
+      description: Retorna tendencias de ingresos y gastos a lo largo del tiempo
+      parameters:
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: group_by
+          in: query
+          description: Agrupación temporal
+          schema:
+            type: string
+            enum: [day, week, month, year]
+            default: month
+      responses:
+        '200':
+          description: Tendencias temporales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrendsAnalyticsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+# ==============================================================================
+# COMPONENTS
+# ==============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido del endpoint /auth/login
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Número de página (comienza en 1)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PageSizeParam:
+      name: page_size
+      in: query
+      description: Cantidad de elementos por página
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    BudgetIdParam:
+      name: budget_id
+      in: path
+      required: true
+      description: ID único del presupuesto
+      schema:
+        type: string
+        format: uuid
+
+    MovementIdParam:
+      name: movement_id
+      in: path
+      required: true
+      description: ID único del movimiento
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    # ==========================================================================
+    # ENUMS
+    # ==========================================================================
+    MovementType:
+      type: string
+      enum:
+        - INCOME
+        - EXPENSE
+        - TRANSFER
+      description: |
+        Tipo de movimiento financiero:
+        * `INCOME` - Ingreso
+        * `EXPENSE` - Gasto
+        * `TRANSFER` - Transferencia
+
+    # ==========================================================================
+    # USER SCHEMAS
+    # ==========================================================================
+    UserRegistrationRequest:
+      type: object
+      required:
+        - email
+        - password
+        - first_name
+        - last_name
+      properties:
+        email:
+          type: string
+          format: email
+          example: juan.perez@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SecurePass123!
+          description: Mínimo 8 caracteres
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Juan
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Pérez
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: juan.perez@example.com
+        password:
+          type: string
+          format: password
+          example: SecurePass123!
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Tiempo de expiración en segundos
+          example: 3600
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          example: juan.perez@example.com
+        first_name:
+          type: string
+          example: Juan
+        last_name:
+          type: string
+          example: Pérez
+        is_active:
+          type: boolean
+          example: true
+        email_verified:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-20T14:45:00Z"
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Juan Carlos
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Pérez García
+        email:
+          type: string
+          format: email
+          example: juan.carlos@example.com
+
+    # ==========================================================================
+    # BUDGET SCHEMAS
+    # ==========================================================================
+    BudgetCreateRequest:
+      type: object
+      required:
+        - name
+        - amount
+        - category
+        - start_date
+        - end_date
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Presupuesto de Alimentación Enero
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+          example: Presupuesto mensual para compras de supermercado y restaurantes
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 500.00
+          description: Monto del presupuesto
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Alimentación
+        start_date:
+          type: string
+          format: date
+          example: "2024-01-01"
+        end_date:
+          type: string
+          format: date
+          example: "2024-01-31"
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          default: USD
+          example: USD
+          description: Código ISO 4217 de moneda
+        is_active:
+          type: boolean
+          default: true
+          example: true
+
+    BudgetUpdateRequest:
+      type: object
+      required:
+        - name
+        - amount
+        - category
+        - start_date
+        - end_date
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Presupuesto de Alimentación Enero
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+          example: Presupuesto mensual actualizado
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 600.00
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Alimentación
+        start_date:
+          type: string
+          format: date
+          example: "2024-01-01"
+        end_date:
+          type: string
+          format: date
+          example: "2024-01-31"
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: USD
+        is_active:
+          type: boolean
+          example: true
+
+    BudgetPatchRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        is_active:
+          type: boolean
+
+    BudgetResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 660e8400-e29b-41d4-a716-446655440001
+        user_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: Presupuesto de Alimentación Enero
+        description:
+          type: string
+          nullable: true
+          example: Presupuesto mensual para compras de supermercado y restaurantes
+        amount:
+          type: number
+          format: decimal
+          example: 500.00
+        category:
+          type: string
+          example: Alimentación
+        start_date:
+          type: string
+          format: date
+          example: "2024-01-01"
+        end_date:
+          type: string
+          format: date
+          example: "2024-01-31"
+        currency:
+          type: string
+          example: USD
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T08:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-05T10:30:00Z"
+
+    BudgetSummaryResponse:
+      type: object
+      properties:
+        budget:
+          $ref: '#/components/schemas/BudgetResponse'
+        total_spent:
+          type: number
+          format: decimal
+          example: 350.75
+          description: Total gastado del presupuesto
+        remaining:
+          type: number
+          format: decimal
+          example: 149.25
+          description: Monto restante
+        percentage_used:
+          type: number
+          format: decimal
+          example: 70.15
+          description: Porcentaje utilizado del presupuesto
+        movement_count:
+          type: integer
+          example: 15
+          description: Cantidad de movimientos asociados
+
+    BudgetListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BudgetResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMetadata'
+
+    # ==========================================================================
+    # MOVEMENT SCHEMAS
+    # ==========================================================================
+    MovementCreateRequest:
+      type: object
+      required:
+        - type
+        - amount
+        - description
+        - category
+        - date
+      properties:
+        budget_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: 660e8400-e29b-41d4-a716-446655440001
+        type:
+          $ref: '#/components/schemas/MovementType'
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+          example: 45.50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+          example: Compra en supermercado
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Alimentación
+        date:
+          type: string
+          format: date-time
+          example: "2024-01-15T14:30:00Z"
+        payment_method:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: Tarjeta de crédito
+        is_recurring:
+          type: boolean
+          default: false
+          example: false
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ["supermercado", "frutas", "verduras"]
+
+    MovementUpdateRequest:
+      type: object
+      required:
+        - type
+        - amount
+        - description
+        - category
+        - date
+      properties:
+        budget_id:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          $ref: '#/components/schemas/MovementType'
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        date:
+          type: string
+          format: date-time
+        payment_method:
+          type: string
+          maxLength: 100
+          nullable: true
+        is_recurring:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+    MovementPatchRequest:
+      type: object
+      properties:
+        budget_id:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          $ref: '#/components/schemas/MovementType'
+        amount:
+          type: number
+          format: decimal
+          minimum: 0
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        date:
+          type: string
+          format: date-time
+        payment_method:
+          type: string
+          maxLength: 100
+          nullable: true
+        is_recurring:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+    MovementResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 770e8400-e29b-41d4-a716-446655440002
+        user_id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        budget_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: 660e8400-e29b-41d4-a716-446655440001
+        type:
+          $ref: '#/components/schemas/MovementType'
+        amount:
+          type: number
+          format: decimal
+          example: 45.50
+        description:
+          type: string
+          example: Compra en supermercado
+        category:
+          type: string
+          example: Alimentación
+        date:
+          type: string
+          format: date-time
+          example: "2024-01-15T14:30:00Z"
+        payment_method:
+          type: string
+          nullable: true
+          example: Tarjeta de crédito
+        is_recurring:
+          type: boolean
+          example: false
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ["supermercado", "frutas", "verduras"]
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T14:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T14:30:00Z"
+
+    MovementListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovementResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationMetadata'
+
+    # ==========================================================================
+    # ANALYTICS SCHEMAS
+    # ==========================================================================
+    AnalyticsSummaryResponse:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+              example: "2024-01-01"
+            to:
+              type: string
+              format: date
+              example: "2024-01-31"
+        total_income:
+          type: number
+          format: decimal
+          example: 3500.00
+        total_expenses:
+          type: number
+          format: decimal
+          example: 2150.75
+        total_transfers:
+          type: number
+          format: decimal
+          example: 500.00
+        balance:
+          type: number
+          format: decimal
+          example: 1349.25
+          description: Ingresos - Gastos
+        movement_count:
+          type: object
+          properties:
+            income:
+              type: integer
+              example: 5
+            expense:
+              type: integer
+              example: 42
+            transfer:
+              type: integer
+              example: 3
+
+    CategoryAnalyticsResponse:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                example: Alimentación
+              total:
+                type: number
+                format: decimal
+                example: 450.75
+              count:
+                type: integer
+                example: 15
+              percentage:
+                type: number
+                format: decimal
+                example: 20.95
+                description: Porcentaje del total
+
+    TrendsAnalyticsResponse:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+        group_by:
+          type: string
+          enum: [day, week, month, year]
+          example: month
+        trends:
+          type: array
+          items:
+            type: object
+            properties:
+              period:
+                type: string
+                example: "2024-01"
+                description: Identificador del período según group_by
+              income:
+                type: number
+                format: decimal
+                example: 3500.00
+              expenses:
+                type: number
+                format: decimal
+                example: 2150.75
+              balance:
+                type: number
+                format: decimal
+                example: 1349.25
+              movement_count:
+                type: integer
+                example: 50
+
+    # ==========================================================================
+    # COMMON SCHEMAS
+    # ==========================================================================
+    PaginationMetadata:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        page_size:
+          type: integer
+          example: 20
+        total_items:
+          type: integer
+          example: 150
+        total_pages:
+          type: integer
+          example: 8
+        has_next:
+          type: boolean
+          example: true
+        has_previous:
+          type: boolean
+          example: false
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Bad Request
+        message:
+          type: string
+          example: El campo 'amount' es requerido
+        details:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            field: amount
+            reason: required
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T14:30:00Z"
+
+  # ============================================================================
+  # RESPONSES
+  # ============================================================================
+  responses:
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Bad Request
+            message: Los datos proporcionados no son válidos
+            details:
+              amount: El campo amount debe ser un número positivo
+            timestamp: "2024-01-15T14:30:00Z"
+
+    Unauthorized:
+      description: No autorizado - Token inválido o expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Unauthorized
+            message: Token de autenticación inválido o expirado
+            timestamp: "2024-01-15T14:30:00Z"
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Not Found
+            message: El recurso solicitado no existe
+            timestamp: "2024-01-15T14:30:00Z"
+
+    InternalServerError:
+      description: Error interno del servidor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Internal Server Error
+            message: Ha ocurrido un error inesperado
+            timestamp: "2024-01-15T14:30:00Z"

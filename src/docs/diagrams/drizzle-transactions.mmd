@@ -1,0 +1,58 @@
+%% Drizzle ORM Transaction Diagram
+%% Shows how Drizzle handles transactions natively
+
+flowchart TD
+    Service["Service Layer<br/>(Business Logic)"]
+    
+    subgraph DrizzleDB ["Drizzle Database Instance"]
+        direction TB
+        Transaction["db.transaction()"]
+        
+        subgraph TxContext ["Transaction Context (tx)"]
+            Insert1["tx.insert(users)"]
+            Insert2["tx.insert(budgets)"]
+            Update1["tx.update(movements)"]
+        end
+        
+        TxControl["Transaction Control<br/>- Auto-commit on success<br/>- Auto-rollback on error"]
+    end
+    
+    DB[("PostgreSQL<br/>Database")]
+    
+    %% Flow: Successful Transaction
+    Service -->|"1. await db.transaction(async (tx) => {...})"| Transaction
+    Transaction -->|"2. BEGIN"| DB
+    Transaction -->|"3. Provide tx context"| TxContext
+    
+    TxContext -->|"4. Execute operations"| Insert1
+    Insert1 -->|"INSERT INTO users"| DB
+    
+    Insert2 -->|"INSERT INTO budgets"| DB
+    Update1 -->|"UPDATE movements"| DB
+    
+    DB -->|"5. All success"| TxControl
+    TxControl -->|"6. COMMIT"| DB
+    TxControl -->|"7. Return result"| Service
+    
+    %% Error Flow
+    DB -.->|"5. Error"| TxControl
+    TxControl -.->|"6. ROLLBACK"| DB
+    TxControl -.->|"7. Throw error"| Service
+    
+    subgraph "Example: Cascade Delete User"
+        Ex1["await db.transaction(async (tx) => {<br/>  await tx.update(users)<br/>    .set({ deletedAt: new Date() })<br/>    .where(eq(users.id, userId));<br/>  <br/>  // Database CASCADE handles related records<br/>  return true;<br/>})"]
+    end
+    
+    Service -.->|"Usage"| Ex1
+    
+    subgraph "Benefits"
+        Benefits["✅ No Unit of Work needed<br/>✅ Type-safe queries<br/>✅ Automatic rollback on error<br/>✅ Clean, readable syntax<br/>✅ Native PostgreSQL transactions"]
+    end
+    
+    style Transaction fill:#ffe6f0
+    style TxContext fill:#e8f5e9
+    style TxControl fill:#fff3e0
+    style DB fill:#e1f5ff
+    style Service fill:#f3e5f5
+    style Ex1 fill:#fce4ec
+    style Benefits fill:#e8f5e9

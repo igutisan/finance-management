@@ -71,6 +71,12 @@ export namespace MovementModel {
 
   export type MovementResponse = typeof movementResponse.static;
 
+  /**
+   * Movement list response (array of movements)
+   */
+  export const movementListResponse = t.Array(movementResponse);
+  export type MovementListResponse = typeof movementListResponse.static;
+
   export const analyticsResponse = t.Object({
     totalIncome: t.Number(),
     totalExpenses: t.Number(),

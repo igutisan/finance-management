@@ -1,19 +1,25 @@
 /**
  * Error Handler Plugin
  *
- * Centralized Elysia plugin that intercepts every exception thrown
+ * Centralised Elysia plugin that intercepts every exception thrown
  * anywhere in the application and maps it to the generic error
  * envelope the API returns.
  *
- * ┌─────────────────────────────────────────────────────────┐
- * │  Error type          │  HTTP   │  Envelope              │
- * ├─────────────────────────────────────────────────────────┤
- * │  ApiError            │  *      │  { error: { code, message } }           │
- * │  ApiError (valid.)   │  422    │  { error: { code, message, details } }  │
- * │  Elysia VALIDATION   │  422    │  { error: { code, message, details } }  │
- * │  Elysia NOT_FOUND    │  404    │  { error: { code, message } }           │
- * │  Unhandled / unknown │  500    │  { error: { code, message } }           │
- * └─────────────────────────────────────────────────────────┘
+ * Follows the official Elysia error-handling pattern:
+ *   1. Register the custom error class with `.error()` so the
+ *      framework assigns it a type-safe code string.
+ *   2. Use `.onError()` and match on `code` for type narrowing
+ *      and auto-completion.
+ *
+ * ┌─────────────────────────────────────────────────────────────┐
+ * │  Error type          │  HTTP   │  Envelope                  │
+ * ├─────────────────────────────────────────────────────────────┤
+ * │  ApiError            │  *      │  { error: { code, message } }          │
+ * │  ApiError (valid.)   │  422    │  { error: { code, message, details } } │
+ * │  Elysia VALIDATION   │  422    │  { error: { code, message, details } } │
+ * │  Elysia NOT_FOUND    │  404    │  { error: { code, message } }          │
+ * │  Unhandled / unknown │  500    │  { error: { code, message } }          │
+ * └─────────────────────────────────────────────────────────────┘
  *
  * Usage:
  *   import { errorHandler } from './shared/plugins/error-handler.plugin';
@@ -82,12 +88,19 @@ function extractValidationDetails(error: unknown): Record<string, string> {
 //  Plugin
 // ──────────────────────────────────────────────────────────
 
-export const errorHandler = new Elysia({ name: "plugin.errorHandler" }).onError(
-  ({ code, error, set }) => {
-    // ── 1. Our custom ApiError ─────────────────────────────
-    if (error instanceof ApiError) {
+export const errorHandler = new Elysia({ name: "plugin.errorHandler" })
+  // Register ApiError so Elysia assigns it the type-safe code "API_ERROR".
+  // This enables `code === 'API_ERROR'` in `onError` with full
+  // auto-completion and type narrowing — the pattern recommended
+  // by the official Elysia documentation.
+  .error({
+    API_ERROR: ApiError,
+  })
+  .onError(({ code, error, set }) => {
+    // ── 1. Our custom ApiError (type-safe match) ───────────
+    if (code === "API_ERROR") {
       set.status = error.status;
-      return error.toJSON();
+      return error.toResponse();
     }
 
     // ── 2. Elysia built-in validation errors ───────────────
@@ -124,5 +137,4 @@ export const errorHandler = new Elysia({ name: "plugin.errorHandler" }).onError(
         ? "Internal server error"
         : (error as Error)?.message || "Internal server error",
     );
-  },
-);
+  });

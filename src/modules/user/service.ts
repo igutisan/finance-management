@@ -4,25 +4,21 @@
  * Business logic for user management.
  * Decoupled from HTTP/Elysia context.
  *
- * Throws ApiError instead of Elysia's status() so the global
- * error handler can produce the generic error envelope automatically.
- * Returns raw data — the controller wraps it with ok() / created().
+ * Following Elysia's official best practice:
+ *   - abstract class with static methods (no class allocation)
+ *   - Repositories passed as parameters from the controller
+ *   - Throws ApiError so the error-handler plugin produces the
+ *     generic error envelope automatically
+ *   - Returns raw data — the controller wraps it with ok() / created()
  */
 
-import { UserRepository } from "./repository";
-import { db } from "../../shared/db";
+import type { UserRepository } from "./repository";
+import type { RefreshTokenRepository } from "../token/repository";
 import type { UserModel } from "./model";
+import type { JwtContext } from "../../shared/types/jwt.types";
 import { PasswordUtil } from "../../shared/utils/password.util";
-import { jwtConfig } from "../../shared/config/jwt.config";
+import { RefreshTokenService } from "../token/service";
 import { ApiError, ErrorCode } from "../../shared/responses";
-
-/**
- * Represents the Elysia JWT context object provided by @elysiajs/jwt.
- */
-interface JwtContext {
-  sign: (payload: Record<string, string | number>) => Promise<string>;
-  verify: (token?: string) => Promise<false | Record<string, unknown>>;
-}
 
 export abstract class UserService {
   /**
@@ -45,24 +41,19 @@ export abstract class UserService {
       lastName: data.lastName,
     });
 
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      isActive: user.isActive,
-      emailVerified: user.emailVerified,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    return this.toUserResponse(user);
   }
 
   /**
    * Authenticate a user and generate JWT tokens
+   *
+   * Delegates token generation entirely to RefreshTokenService
+   * so all token logic (hashing, persistence, expiry) is centralised.
    */
   static async login(
     data: UserModel.LoginBody,
     userRepo: UserRepository,
+    tokenRepo: RefreshTokenRepository,
     jwt: JwtContext,
   ): Promise<UserModel.LoginResponse> {
     const user = await userRepo.findByEmail(data.email);
@@ -76,36 +67,17 @@ export abstract class UserService {
       throw new ApiError(ErrorCode.INVALID_CREDENTIALS);
     }
 
-    const now = Math.floor(Date.now() / 1000);
-
-    // Generate access token (short-lived)
-    const accessToken = await jwt.sign({
-      sub: user.id,
-      type: "access",
-      exp: now + jwtConfig.accessToken.expiresIn,
-    });
-
-    // Generate refresh token (long-lived)
-    const refreshToken = await jwt.sign({
-      sub: user.id,
-      type: "refresh",
-      exp: now + jwtConfig.refreshToken.expiresIn,
-    });
+    const tokens = await RefreshTokenService.createTokenPair(
+      user.id,
+      jwt,
+      tokenRepo,
+    );
 
     return {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_in: jwtConfig.accessToken.expiresIn,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        isActive: user.isActive,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_in: tokens.expires_in,
+      user: this.toUserResponse(user),
     };
   }
 
@@ -121,16 +93,7 @@ export abstract class UserService {
       throw new ApiError(ErrorCode.USER_NOT_FOUND);
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      isActive: user.isActive,
-      emailVerified: user.emailVerified,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    return this.toUserResponse(user);
   }
 
   /**
@@ -154,6 +117,25 @@ export abstract class UserService {
       throw new ApiError(ErrorCode.USER_NOT_FOUND);
     }
 
+    return this.toUserResponse(user);
+  }
+
+  /**
+   * Delete user (soft delete with cascade)
+   */
+  static async delete(id: string, userRepo: UserRepository): Promise<boolean> {
+    const deleted = await userRepo.softDelete(id);
+    if (!deleted) {
+      throw new ApiError(ErrorCode.USER_NOT_FOUND);
+    }
+
+    return true;
+  }
+
+  /**
+   * Transform User entity to response DTO
+   */
+  private static toUserResponse(user: any): UserModel.UserResponse {
     return {
       id: user.id,
       email: user.email,
@@ -164,20 +146,5 @@ export abstract class UserService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
-  }
-
-  /**
-   * Delete user (soft delete with cascade)
-   */
-  static async delete(id: string, userRepo: UserRepository): Promise<boolean> {
-    return await db.transaction(async () => {
-      const deleted = await userRepo.softDelete(id);
-      if (!deleted) {
-        throw new ApiError(ErrorCode.USER_NOT_FOUND);
-      }
-
-      // Database CASCADE handles related records
-      return true;
-    });
   }
 }

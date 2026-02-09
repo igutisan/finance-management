@@ -3,14 +3,17 @@
  *
  * Business logic for budget management.
  *
- * Throws ApiError instead of Elysia's status() so the global
- * error handler can produce the generic error envelope automatically.
- * Returns raw data — the controller wraps it with ok() / created().
+ * Following Elysia's official best practice:
+ *   - abstract class with static methods (no class allocation)
+ *   - Repositories passed as parameters from the controller
+ *   - Throws ApiError so the error-handler plugin produces the
+ *     generic error envelope automatically
+ *   - Returns raw data — the controller wraps it with ok() / created()
  */
 
-import { BudgetRepository } from "./repository";
-import { UserRepository } from "../user/repository";
-import { MovementRepository } from "../movement/repository";
+import type { BudgetRepository } from "./repository";
+import type { UserRepository } from "../user/repository";
+import type { MovementRepository } from "../movement/repository";
 import type { BudgetModel } from "./model";
 import { ApiError, ErrorCode } from "../../shared/responses";
 

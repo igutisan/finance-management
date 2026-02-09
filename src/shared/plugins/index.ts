@@ -4,7 +4,8 @@
  * Re-exports all Elysia plugins for convenient imports:
  *
  * @example
- * import { errorHandler } from '../../shared/plugins';
+ * import { errorHandler, authPlugin } from '../../shared/plugins';
  */
 
 export { errorHandler } from "./error-handler.plugin";
+export { authPlugin } from "./auth.plugin";

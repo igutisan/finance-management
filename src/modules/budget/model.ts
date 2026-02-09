@@ -62,6 +62,12 @@ export namespace BudgetModel {
   export type BudgetSummaryResponse = typeof budgetSummaryResponse.static;
 
   /**
+   * Budget list response (array of budgets)
+   */
+  export const budgetListResponse = t.Array(budgetResponse);
+  export type BudgetListResponse = typeof budgetListResponse.static;
+
+  /**
    * Delete response (null data — the message lives in the envelope)
    */
   export const deleteResponse = t.Null();

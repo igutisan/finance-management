@@ -4,17 +4,22 @@
  * Elysia routes for user management.
  * Handles HTTP routing, validation, and delegates to UserService.
  *
- * All success responses are wrapped in the generic envelope via ok() / created().
- * Errors are thrown as ApiError and handled by the global error handler.
+ * Following Elysia's official best practice:
+ *   - Repositories instantiated at module level
+ *   - Passed as parameters to static service methods
+ *   - Success responses wrapped in the generic envelope via ok() / created()
+ *   - Errors thrown as ApiError are handled by the error-handler plugin
+ *   - Protected routes use the authPlugin macro (`auth: true`)
+ *     which injects `userId` into the handler context
  */
 
 import { Elysia } from "elysia";
-import { jwt } from "@elysiajs/jwt";
 import { UserService } from "./service";
 import { UserRepository } from "./repository";
+import { RefreshTokenRepository } from "../token/repository";
 import { UserModel } from "./model";
 import { db } from "../../shared/db";
-import { jwtConfig } from "../../shared/config/jwt.config";
+import { authPlugin } from "../../shared/plugins";
 import {
   ok,
   created,
@@ -24,18 +29,13 @@ import {
 } from "../../shared/responses";
 
 const userRepo = new UserRepository(db);
+const tokenRepo = new RefreshTokenRepository(db);
 
 export const user = new Elysia({ prefix: "/users" })
-  // Add JWT plugin
-  .use(
-    jwt({
-      name: "jwt",
-      secret: jwtConfig.secret,
-    }),
-  )
+  .use(authPlugin)
 
   /**
-   * POST /users/register - Register a new user
+   * POST /users/register - Register a new user (public)
    */
   .post(
     "/register",
@@ -55,12 +55,12 @@ export const user = new Elysia({ prefix: "/users" })
   )
 
   /**
-   * POST /users/login - Login user
+   * POST /users/login - Login user (public)
    */
   .post(
     "/login",
     async ({ body, jwt }) => {
-      const data = await UserService.login(body, userRepo, jwt);
+      const data = await UserService.login(body, userRepo, tokenRepo, jwt);
       return ok(data, "Login successful");
     },
     {
@@ -74,35 +74,39 @@ export const user = new Elysia({ prefix: "/users" })
   )
 
   /**
-   * GET /users/:id - Get user by ID
+   * GET /users/me - Get current authenticated user (protected)
    */
   .get(
-    "/:id",
-    async ({ params }) => {
-      const userData = await UserService.getById(params.id, userRepo);
+    "/me",
+    async ({ userId }) => {
+      const userData = await UserService.getById(userId, userRepo);
       return ok(userData, "User fetched successfully");
     },
     {
+      auth: true,
       response: {
         200: successSchema(UserModel.userResponse, "User fetched"),
+        401: errorSchema("Authentication required"),
         404: errorSchema("User not found"),
       },
     },
   )
 
   /**
-   * PATCH /users/:id - Update user
+   * PATCH /users/me - Update current authenticated user (protected)
    */
   .patch(
-    "/:id",
-    async ({ params, body }) => {
-      const userData = await UserService.update(params.id, body, userRepo);
+    "/me",
+    async ({ userId, body }) => {
+      const userData = await UserService.update(userId, body, userRepo);
       return ok(userData, "User updated successfully");
     },
     {
+      auth: true,
       body: UserModel.updateBody,
       response: {
         200: successSchema(UserModel.userResponse, "User updated"),
+        401: errorSchema("Authentication required"),
         404: errorSchema("User not found"),
         422: validationErrorSchema(),
       },
@@ -110,17 +114,19 @@ export const user = new Elysia({ prefix: "/users" })
   )
 
   /**
-   * DELETE /users/:id - Delete user (soft delete)
+   * DELETE /users/me - Delete current authenticated user (protected)
    */
   .delete(
-    "/:id",
-    async ({ params }) => {
-      await UserService.delete(params.id, userRepo);
+    "/me",
+    async ({ userId }) => {
+      await UserService.delete(userId, userRepo);
       return ok(null, "User deleted successfully");
     },
     {
+      auth: true,
       response: {
         200: successSchema(UserModel.deleteResponse, "User deleted"),
+        401: errorSchema("Authentication required"),
         404: errorSchema("User not found"),
       },
     },

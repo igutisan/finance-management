@@ -3,8 +3,13 @@
  *
  * Elysia routes for movement (transaction) management.
  *
- * All success responses are wrapped in the generic envelope via ok() / created().
- * Errors are thrown as ApiError and handled by the global error handler.
+ * Following Elysia's official best practice:
+ *   - Repositories instantiated at module level
+ *   - Passed as parameters to static service methods
+ *   - Success responses wrapped in the generic envelope via ok() / created()
+ *   - Errors thrown as ApiError are handled by the error-handler plugin
+ *   - Protected routes use the authPlugin macro (`auth: true`)
+ *     which injects `userId` into the handler context
  */
 
 import { Elysia } from "elysia";
@@ -14,6 +19,7 @@ import { UserRepository } from "../user/repository";
 import { BudgetRepository } from "../budget/repository";
 import { MovementModel } from "./model";
 import { db } from "../../shared/db";
+import { authPlugin } from "../../shared/plugins";
 import {
   ok,
   created,
@@ -22,21 +28,19 @@ import {
   validationErrorSchema,
 } from "../../shared/responses";
 
-// Initialize repositories
 const movementRepo = new MovementRepository(db);
 const userRepo = new UserRepository(db);
 const budgetRepo = new BudgetRepository(db);
 
 export const movement = new Elysia({ prefix: "/movements" })
+  .use(authPlugin)
+
   /**
    * POST /movements - Create a new movement
-   * TODO: Get userId from auth token
    */
   .post(
     "/",
-    async ({ body, set }) => {
-      // TODO: Extract userId from JWT token
-      const userId = "temp-user-id";
+    async ({ body, set, userId }) => {
       const data = await MovementService.create(
         userId,
         body,
@@ -48,10 +52,12 @@ export const movement = new Elysia({ prefix: "/movements" })
       return created(data, "Movement created successfully");
     },
     {
+      auth: true,
       body: MovementModel.createBody,
       response: {
         201: successSchema(MovementModel.movementResponse, "Movement created"),
         400: errorSchema("Invalid amount"),
+        401: errorSchema("Authentication required"),
         403: errorSchema("Budget does not belong to user"),
         404: errorSchema("Budget or user not found"),
         422: validationErrorSchema(),
@@ -61,26 +67,39 @@ export const movement = new Elysia({ prefix: "/movements" })
 
   /**
    * GET /movements - Get all user movements
-   * TODO: Get userId from auth token
    */
-  .get("/", async () => {
-    const userId = "temp-user-id";
-    const data = await MovementService.getUserMovements(userId, movementRepo);
-    return ok(data, "Movements fetched successfully");
-  })
+  .get(
+    "/",
+    async ({ userId }) => {
+      const data = await MovementService.getUserMovements(userId, movementRepo);
+      return ok(data, "Movements fetched successfully");
+    },
+    {
+      auth: true,
+      response: {
+        200: successSchema(
+          MovementModel.movementListResponse,
+          "Movements fetched",
+        ),
+        401: errorSchema("Authentication required"),
+      },
+    },
+  )
 
   /**
    * GET /movements/:id - Get movement by ID
    */
   .get(
     "/:id",
-    async ({ params }) => {
+    async ({ params, userId }) => {
       const data = await MovementService.getById(params.id, movementRepo);
       return ok(data, "Movement fetched successfully");
     },
     {
+      auth: true,
       response: {
         200: successSchema(MovementModel.movementResponse, "Movement fetched"),
+        401: errorSchema("Authentication required"),
         404: errorSchema("Movement not found"),
       },
     },
@@ -88,21 +107,21 @@ export const movement = new Elysia({ prefix: "/movements" })
 
   /**
    * GET /movements/analytics - Get user analytics
-   * TODO: Get userId from auth token
    */
   .get(
     "/analytics",
-    async () => {
-      const userId = "temp-user-id";
+    async ({ userId }) => {
       const data = await MovementService.getUserAnalytics(userId, movementRepo);
       return ok(data, "Analytics fetched successfully");
     },
     {
+      auth: true,
       response: {
         200: successSchema(
           MovementModel.analyticsResponse,
           "Analytics fetched",
         ),
+        401: errorSchema("Authentication required"),
       },
     },
   )
@@ -112,15 +131,17 @@ export const movement = new Elysia({ prefix: "/movements" })
    */
   .patch(
     "/:id",
-    async ({ params, body }) => {
+    async ({ params, body, userId }) => {
       const data = await MovementService.update(params.id, body, movementRepo);
       return ok(data, "Movement updated successfully");
     },
     {
+      auth: true,
       body: MovementModel.updateBody,
       response: {
         200: successSchema(MovementModel.movementResponse, "Movement updated"),
         400: errorSchema("Invalid amount"),
+        401: errorSchema("Authentication required"),
         404: errorSchema("Movement not found"),
         422: validationErrorSchema(),
       },
@@ -132,13 +153,15 @@ export const movement = new Elysia({ prefix: "/movements" })
    */
   .delete(
     "/:id",
-    async ({ params }) => {
+    async ({ params, userId }) => {
       await MovementService.delete(params.id, movementRepo);
       return ok(null, "Movement deleted successfully");
     },
     {
+      auth: true,
       response: {
         200: successSchema(MovementModel.deleteResponse, "Movement deleted"),
+        401: errorSchema("Authentication required"),
         404: errorSchema("Movement not found"),
       },
     },

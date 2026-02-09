@@ -32,8 +32,8 @@ export const refreshTokens = pgTable('refresh_tokens', {
   expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   isRevoked: boolean('is_revoked').default(false).notNull(),
-  ipAddress: varchar('ip_address', { length: 45 }), // IPv6 max length
-  userAgent: text('user_agent'),
+  //ipAddress: varchar('ip_address', { length: 45 }), // IPv6 max length
+  //userAgent: text('user_agent'),
 }, (table) => ({
   tokenHashIdx: index('idx_refresh_tokens_token_hash').on(table.tokenHash),
   userIdIdx: index('idx_refresh_tokens_user_id').on(table.userId),
@@ -109,3 +109,6 @@ export type NewBudget = typeof budgets.$inferInsert;
 
 export type Movement = typeof movements.$inferSelect;
 export type NewMovement = typeof movements.$inferInsert;
+
+export type Token = typeof refreshTokens.$inferSelect;
+export type NewToken = typeof refreshTokens.$inferInsert;

@@ -17,6 +17,8 @@ export enum ErrorCode {
   TOKEN_MISSING = "TOKEN_MISSING",
   TOKEN_INVALID = "TOKEN_INVALID",
   TOKEN_EXPIRED = "TOKEN_EXPIRED",
+  TOKEN_REVOKED = "TOKEN_REVOKED",
+  TOKEN_REUSE_DETECTED = "TOKEN_REUSE_DETECTED",
   INVALID_CREDENTIALS = "INVALID_CREDENTIALS",
 
   // ===== User =====
@@ -74,6 +76,15 @@ export const ErrorDefaults: Record<
   [ErrorCode.TOKEN_EXPIRED]: {
     status: 401,
     message: "Authentication token has expired",
+  },
+  [ErrorCode.TOKEN_REVOKED]: {
+    status: 401,
+    message: "Token has been revoked",
+  },
+  [ErrorCode.TOKEN_REUSE_DETECTED]: {
+    status: 401,
+    message:
+      "Token reuse detected — all sessions have been revoked for security",
   },
   [ErrorCode.INVALID_CREDENTIALS]: {
     status: 401,

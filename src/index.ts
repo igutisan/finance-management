@@ -9,6 +9,7 @@ import { Elysia } from "elysia";
 import { user } from "./modules/user";
 import { budget } from "./modules/budget";
 import { movement } from "./modules/movement";
+import { token } from "./modules/token";
 import { errorHandler } from "./shared/plugins";
 
 const app = new Elysia()
@@ -30,6 +31,7 @@ const app = new Elysia()
   .use(user)
   .use(budget)
   .use(movement)
+  .use(token)
 
   .listen(3000);
 

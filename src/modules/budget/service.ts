@@ -9,6 +9,10 @@
  *   - Throws ApiError so the error-handler plugin produces the
  *     generic error envelope automatically
  *   - Returns raw data — the controller wraps it with ok() / created()
+ *
+ * Security:
+ *   - ALL operations (read, update, delete) validate ownership
+ *   - A user can only access/modify their own budgets
  */
 
 import type { BudgetRepository } from "./repository";
@@ -20,6 +24,11 @@ import { ApiError, ErrorCode } from "../../shared/responses";
 export abstract class BudgetService {
   /**
    * Create a new budget
+   *
+   * Validates:
+   *   - User exists
+   *   - End date is after start date
+   *   - Amount is positive
    */
   static async create(
     userId: string,
@@ -62,14 +71,24 @@ export abstract class BudgetService {
 
   /**
    * Get budget by ID
+   *
+   * Security: validates that the budget belongs to the requesting user
    */
   static async getById(
     id: string,
+    userId: string,
     budgetRepo: BudgetRepository,
   ): Promise<BudgetModel.BudgetResponse> {
     const budget = await budgetRepo.findById(id);
     if (!budget) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
+    }
+
+    // Validate ownership
+    if (budget.userId !== userId) {
+      throw new ApiError(ErrorCode.FORBIDDEN, {
+        message: "Budget does not belong to user",
+      });
     }
 
     return this.toBudgetResponse(budget);
@@ -88,12 +107,29 @@ export abstract class BudgetService {
 
   /**
    * Update budget
+   *
+   * Security: validates that the budget belongs to the requesting user
+   * before applying any updates
    */
   static async update(
     id: string,
+    userId: string,
     data: BudgetModel.UpdateBody,
     budgetRepo: BudgetRepository,
   ): Promise<BudgetModel.BudgetResponse> {
+    // Fetch the existing budget first
+    const existingBudget = await budgetRepo.findById(id);
+    if (!existingBudget) {
+      throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
+    }
+
+    // Validate ownership BEFORE allowing any modification
+    if (existingBudget.userId !== userId) {
+      throw new ApiError(ErrorCode.FORBIDDEN, {
+        message: "Budget does not belong to user",
+      });
+    }
+
     // Validate dates if both are provided
     if (data.startDate && data.endDate) {
       const startDate = new Date(data.startDate);
@@ -118,23 +154,44 @@ export abstract class BudgetService {
 
   /**
    * Delete budget (soft delete)
+   *
+   * Security: validates that the budget belongs to the requesting user
+   * before allowing deletion
    */
   static async delete(
     id: string,
+    userId: string,
     budgetRepo: BudgetRepository,
   ): Promise<boolean> {
+    // Fetch the existing budget first
+    const existingBudget = await budgetRepo.findById(id);
+    if (!existingBudget) {
+      throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
+    }
+
+    // Validate ownership BEFORE allowing deletion
+    if (existingBudget.userId !== userId) {
+      throw new ApiError(ErrorCode.FORBIDDEN, {
+        message: "Budget does not belong to user",
+      });
+    }
+
     const deleted = await budgetRepo.softDelete(id);
     if (!deleted) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
+
     return true;
   }
 
   /**
    * Get budget summary with total spent vs budgeted
+   *
+   * Security: validates that the budget belongs to the requesting user
    */
   static async getSummary(
     budgetId: string,
+    userId: string,
     budgetRepo: BudgetRepository,
     movementRepo: MovementRepository,
   ): Promise<BudgetModel.BudgetSummaryResponse> {
@@ -143,13 +200,15 @@ export abstract class BudgetService {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
 
-    // Get all movements for this budget
-    const movements = await movementRepo.findByBudgetId(budgetId);
+    // Validate ownership
+    if (budget.userId !== userId) {
+      throw new ApiError(ErrorCode.FORBIDDEN, {
+        message: "Budget does not belong to user",
+      });
+    }
 
-    // Calculate total spent (EXPENSE movements)
-    const totalSpent = movements
-      .filter((m) => m.type === "EXPENSE")
-      .reduce((sum, m) => sum + Number(m.amount), 0);
+    // Get total spent directly from DB (more efficient)
+    const totalSpent = await movementRepo.getBudgetTotalSpent(budgetId, userId);
 
     const budgetAmount = Number(budget.amount);
     const remaining = budgetAmount - totalSpent;

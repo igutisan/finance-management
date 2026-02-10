@@ -28,7 +28,9 @@ export abstract class UserService {
     data: UserModel.RegisterBody,
     userRepo: UserRepository,
   ): Promise<UserModel.UserResponse> {
+    console.log("prueba antes de vladiar");
     const emailExist = await userRepo.emailExists(data.email);
+    console.log("test", emailExist);
     if (emailExist) {
       throw new ApiError(ErrorCode.EMAIL_ALREADY_EXISTS);
     }
@@ -40,6 +42,8 @@ export abstract class UserService {
       firstName: data.firstName,
       lastName: data.lastName,
     });
+
+    console.log("test2", user);
 
     return this.toUserResponse(user);
   }

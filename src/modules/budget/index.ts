@@ -87,7 +87,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
   .get(
     "/:id",
     async ({ params, userId }) => {
-      const data = await BudgetService.getById(params.id, budgetRepo);
+      const data = await BudgetService.getById(params.id, userId, budgetRepo);
       return ok(data, "Budget fetched successfully");
     },
     {
@@ -95,6 +95,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
       response: {
         200: successSchema(BudgetModel.budgetResponse, "Budget fetched"),
         401: errorSchema("Authentication required"),
+        403: errorSchema("Budget does not belong to user"),
         404: errorSchema("Budget not found"),
       },
     },
@@ -108,6 +109,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
     async ({ params, userId }) => {
       const data = await BudgetService.getSummary(
         params.id,
+        userId,
         budgetRepo,
         movementRepo,
       );
@@ -121,6 +123,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
           "Budget summary fetched",
         ),
         401: errorSchema("Authentication required"),
+        403: errorSchema("Budget does not belong to user"),
         404: errorSchema("Budget not found"),
       },
     },
@@ -132,7 +135,12 @@ export const budget = new Elysia({ prefix: "/budgets" })
   .patch(
     "/:id",
     async ({ params, body, userId }) => {
-      const data = await BudgetService.update(params.id, body, budgetRepo);
+      const data = await BudgetService.update(
+        params.id,
+        userId,
+        body,
+        budgetRepo,
+      );
       return ok(data, "Budget updated successfully");
     },
     {
@@ -142,6 +150,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
         200: successSchema(BudgetModel.budgetResponse, "Budget updated"),
         400: errorSchema("Invalid date range or amount"),
         401: errorSchema("Authentication required"),
+        403: errorSchema("Budget does not belong to user"),
         404: errorSchema("Budget not found"),
         422: validationErrorSchema(),
       },
@@ -154,7 +163,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
   .delete(
     "/:id",
     async ({ params, userId }) => {
-      await BudgetService.delete(params.id, budgetRepo);
+      await BudgetService.delete(params.id, userId, budgetRepo);
       return ok(null, "Budget deleted successfully");
     },
     {
@@ -162,6 +171,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
       response: {
         200: successSchema(BudgetModel.deleteResponse, "Budget deleted"),
         401: errorSchema("Authentication required"),
+        403: errorSchema("Budget does not belong to user"),
         404: errorSchema("Budget not found"),
       },
     },

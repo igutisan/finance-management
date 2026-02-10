@@ -92,7 +92,11 @@ export const movement = new Elysia({ prefix: "/movements" })
   .get(
     "/:id",
     async ({ params, userId }) => {
-      const data = await MovementService.getById(params.id, movementRepo);
+      const data = await MovementService.getById(
+        params.id,
+        userId,
+        movementRepo,
+      );
       return ok(data, "Movement fetched successfully");
     },
     {
@@ -132,7 +136,12 @@ export const movement = new Elysia({ prefix: "/movements" })
   .patch(
     "/:id",
     async ({ params, body, userId }) => {
-      const data = await MovementService.update(params.id, body, movementRepo);
+      const data = await MovementService.update(
+        params.id,
+        userId,
+        body,
+        movementRepo,
+      );
       return ok(data, "Movement updated successfully");
     },
     {
@@ -142,6 +151,7 @@ export const movement = new Elysia({ prefix: "/movements" })
         200: successSchema(MovementModel.movementResponse, "Movement updated"),
         400: errorSchema("Invalid amount"),
         401: errorSchema("Authentication required"),
+        403: errorSchema("Movement does not belong to user"),
         404: errorSchema("Movement not found"),
         422: validationErrorSchema(),
       },
@@ -154,7 +164,7 @@ export const movement = new Elysia({ prefix: "/movements" })
   .delete(
     "/:id",
     async ({ params, userId }) => {
-      await MovementService.delete(params.id, movementRepo);
+      await MovementService.delete(params.id, userId, movementRepo);
       return ok(null, "Movement deleted successfully");
     },
     {
@@ -162,6 +172,7 @@ export const movement = new Elysia({ prefix: "/movements" })
       response: {
         200: successSchema(MovementModel.deleteResponse, "Movement deleted"),
         401: errorSchema("Authentication required"),
+        403: errorSchema("Movement does not belong to user"),
         404: errorSchema("Movement not found"),
       },
     },

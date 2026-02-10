@@ -36,11 +36,11 @@ export class MovementRepository {
       .where(and(eq(movements.userId, userId), isNull(movements.deletedAt)));
   }
 
-  async findByBudgetId(budgetId: string): Promise<Movement[]> {
+  async findByBudgetId(budgetId: string, userId: string): Promise<Movement[]> {
     return await this.db
       .select()
       .from(movements)
-      .where(and(eq(movements.budgetId, budgetId), isNull(movements.deletedAt)));
+      .where(and(eq(movements.budgetId, budgetId), eq(movements.userId, userId), isNull(movements.deletedAt)));
   }
 
   async findByType(type: 'INCOME' | 'EXPENSE' | 'TRANSFER'): Promise<Movement[]> {
@@ -78,6 +78,22 @@ export class MovementRepository {
         and(
           eq(movements.userId, userId),
           eq(movements.type, type),
+          isNull(movements.deletedAt)
+        )
+      );
+    
+    return Number(result[0]?.total || 0);
+  }
+
+  async getBudgetTotalSpent(budgetId: string, userId: string): Promise<number> {
+    const result = await this.db
+      .select({ total: sum(movements.amount) })
+      .from(movements)
+      .where(
+        and(
+          eq(movements.budgetId, budgetId),
+          eq(movements.userId, userId),
+          eq(movements.type, 'EXPENSE'),
           isNull(movements.deletedAt)
         )
       );

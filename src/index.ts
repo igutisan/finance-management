@@ -6,6 +6,8 @@
  */
 
 import { Elysia } from "elysia";
+import { swagger } from "@elysiajs/swagger";
+import { cors } from "@elysiajs/cors";
 import { user } from "./modules/user";
 import { budget } from "./modules/budget";
 import { movement } from "./modules/movement";
@@ -13,8 +15,24 @@ import { token } from "./modules/token";
 import { errorHandler } from "./shared/plugins";
 
 const app = new Elysia()
+  .use(cors())
+  // ── Documentation ───────────────────────────────────────────────────
+  .use(
+    swagger({
+      path: "/doc",
+      documentation: {
+        info: {
+          title: "Budget API",
+          version: "1.0.0",
+        },
+      },
+    }),
+  )
+
   // ── Centralised error handling ──────────────────────────────────────
   .use(errorHandler)
+
+
 
   // ── Health check ────────────────────────────────────────────────────
   .get("/health", () => ({
@@ -33,7 +51,7 @@ const app = new Elysia()
   .use(movement)
   .use(token)
 
-  .listen(3000);
+  .listen(process.env.APP_PORT || 3002);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`,

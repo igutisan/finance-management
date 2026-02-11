@@ -41,6 +41,10 @@
  */
 
 import { t, type TSchema } from "elysia";
+import {
+  type PaginationMeta,
+  paginationMetaSchema,
+} from "../types/pagination.types";
 
 // ──────────────────────────────────────────────
 //  Runtime helpers
@@ -51,6 +55,14 @@ export interface SuccessEnvelope<T = unknown> {
   status: number;
   message: string;
   data: T;
+}
+
+export interface PaginatedSuccessEnvelope<T = unknown> {
+  success: true;
+  status: number;
+  message: string;
+  data: T[];
+  meta: PaginationMeta;
 }
 
 export interface ErrorEnvelope {
@@ -91,6 +103,23 @@ export function created<T>(
   return ok(data, message, 201);
 }
 
+/**
+ * Build a paginated success response envelope.
+ */
+export function okPaginated<T>(
+  data: T[],
+  meta: PaginationMeta,
+  message = "OK",
+): PaginatedSuccessEnvelope<T> {
+  return {
+    success: true,
+    status: 200,
+    message,
+    data,
+    meta,
+  };
+}
+
 // ──────────────────────────────────────────────
 //  Elysia schemas
 // ──────────────────────────────────────────────
@@ -108,6 +137,28 @@ export function successSchema(dataSchema: TSchema, description?: string) {
       status: t.Number(),
       message: t.String(),
       data: dataSchema,
+    },
+    { description },
+  );
+}
+
+/**
+ * Wraps any item schema inside the paginated success envelope.
+ *
+ * @example
+ * response: { 200: paginatedSuccessSchema(MovementModel.movementResponse) }
+ */
+export function paginatedSuccessSchema(
+  itemSchema: TSchema,
+  description?: string,
+) {
+  return t.Object(
+    {
+      success: t.Literal(true),
+      status: t.Number(),
+      message: t.String(),
+      data: t.Array(itemSchema),
+      meta: paginationMetaSchema,
     },
     { description },
   );

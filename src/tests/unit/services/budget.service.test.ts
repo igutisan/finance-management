@@ -40,10 +40,12 @@ describe("BudgetService", () => {
         })),
         softDelete: mock((id: string) => Promise.resolve(true)),
         findByUserId: mock((userId: string) => Promise.resolve([])),
+        findByUserIdPaginated: mock(() => Promise.resolve({ items: [], total: 0 })),
     } as unknown as BudgetRepository;
 
     const mockMovementRepo = {
         findByBudgetId: mock(() => Promise.resolve([])),
+        getBudgetTotalSpent: mock(() => Promise.resolve(0)),
     } as unknown as MovementRepository;
 
     // Reset mocks before each test if needed

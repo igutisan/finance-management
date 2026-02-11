@@ -5,9 +5,29 @@
  */
 
 import { t } from "elysia";
+import { paginationQuerySchema } from "../../shared/types/pagination.types";
 
 export namespace MovementModel {
   // ===== Request DTOs =====
+
+  /**
+   * Query params for GET /movements (pagination + filters)
+   */
+  export const queryParams = t.Object({
+    ...paginationQuerySchema,
+    type: t.Optional(
+      t.Union([
+        t.Literal("INCOME"),
+        t.Literal("EXPENSE"),
+        t.Literal("TRANSFER"),
+      ]),
+    ),
+    month: t.Optional(t.Numeric({ minimum: 1, maximum: 12 })),
+    year: t.Optional(t.Numeric({ minimum: 2000, maximum: 2100 })),
+  });
+
+  export type QueryParams = typeof queryParams.static;
+
 
   export const createBody = t.Object({
     budgetId: t.Optional(t.String()),
@@ -16,7 +36,7 @@ export namespace MovementModel {
       t.Literal("EXPENSE"),
       t.Literal("TRANSFER"),
     ]),
-    amount: t.String(), // Numeric as string
+    amount: t.String({ pattern: "^\\d+(\\.\\d{1,2})?$", minLength: 1 }), // Positive decimal string (e.g. "100", "99.99")
     description: t.String({ minLength: 1 }),
     category: t.String({ minLength: 1 }),
     date: t.String(), // ISO date string
@@ -36,7 +56,7 @@ export namespace MovementModel {
         t.Literal("TRANSFER"),
       ]),
     ),
-    amount: t.Optional(t.String()),
+    amount: t.Optional(t.String({ pattern: "^\\d+(\\.\\d{1,2})?$", minLength: 1 })),
     description: t.Optional(t.String()),
     category: t.Optional(t.String()),
     date: t.Optional(t.String()),

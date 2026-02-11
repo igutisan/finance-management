@@ -5,14 +5,27 @@
  */
 
 import { t } from "elysia";
+import { paginationQuerySchema } from "../../shared/types/pagination.types";
 
 export namespace BudgetModel {
   // ===== Request DTOs =====
 
+  /**
+   * Query params for GET /budgets (pagination + filters)
+   */
+  export const queryParams = t.Object({
+    ...paginationQuerySchema,
+    category: t.Optional(t.String()),
+    isActive: t.Optional(t.BooleanString()),
+  });
+
+  export type QueryParams = typeof queryParams.static;
+
+
   export const createBody = t.Object({
     name: t.String({ minLength: 1 }),
     description: t.Optional(t.String()),
-    amount: t.String(), // Numeric as string
+    amount: t.String({ pattern: "^\\d+(\\.\\d{1,2})?$", minLength: 1 }), // Positive decimal string (e.g. "100", "99.99")
     category: t.String({ minLength: 1 }),
     startDate: t.String(), // ISO date string
     endDate: t.String(),
@@ -24,7 +37,7 @@ export namespace BudgetModel {
   export const updateBody = t.Object({
     name: t.Optional(t.String()),
     description: t.Optional(t.String()),
-    amount: t.Optional(t.String()),
+    amount: t.Optional(t.String({ pattern: "^\\d+(\\.\\d{1,2})?$", minLength: 1 })),
     category: t.Optional(t.String()),
     startDate: t.Optional(t.String()),
     endDate: t.Optional(t.String()),

@@ -4,7 +4,7 @@
  * Data access layer for Budget entity using Drizzle ORM.
  */
 
-import { eq, and, isNull, gte, lte } from 'drizzle-orm';
+import { eq, and, isNull, gte, lte, count, type SQL } from 'drizzle-orm';
 import type { Database } from '../../shared/db';
 import { budgets } from '../../shared/db/schema';
 import type { Budget, NewBudget } from '../../shared/db/schema';
@@ -34,6 +34,57 @@ export class BudgetRepository {
       .select()
       .from(budgets)
       .where(and(eq(budgets.userId, userId), isNull(budgets.deletedAt)));
+  }
+
+  /**
+   * Paginated + filtered query for user budgets.
+   *
+   * Filters: category, isActive.
+   * Orders by createdAt DESC.
+   */
+  async findByUserIdPaginated(
+    userId: string,
+    options: {
+      page: number;
+      limit: number;
+      category?: string;
+      isActive?: boolean;
+    },
+  ): Promise<{ items: Budget[]; total: number }> {
+    const { page, limit, category, isActive } = options;
+    const offset = (page - 1) * limit;
+
+    const conditions: SQL[] = [
+      eq(budgets.userId, userId),
+      isNull(budgets.deletedAt),
+    ];
+
+    if (category) {
+      conditions.push(eq(budgets.category, category));
+    }
+
+    if (isActive !== undefined) {
+      conditions.push(eq(budgets.isActive, isActive));
+    }
+
+    const whereClause = and(...conditions);
+
+    const countResult = await this.db
+      .select({ total: count() })
+      .from(budgets)
+      .where(whereClause);
+
+    const total = Number(countResult[0]?.total || 0);
+
+    const items = await this.db
+      .select()
+      .from(budgets)
+      .where(whereClause)
+      .orderBy(budgets.createdAt)
+      .limit(limit)
+      .offset(offset);
+
+    return { items, total };
   }
 
   async findByCategory(category: string): Promise<Budget[]> {

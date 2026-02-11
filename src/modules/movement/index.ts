@@ -23,7 +23,9 @@ import { authPlugin } from "../../shared/plugins";
 import {
   ok,
   created,
+  okPaginated,
   successSchema,
+  paginatedSuccessSchema,
   errorSchema,
   validationErrorSchema,
 } from "../../shared/responses";
@@ -66,19 +68,36 @@ export const movement = new Elysia({ prefix: "/movements" })
   )
 
   /**
-   * GET /movements - Get all user movements
+   * GET /movements - Get all user movements (paginated + filtered)
+   *
+   * Query params: ?page=1&limit=20&type=EXPENSE&month=2&year=2026
    */
   .get(
     "/",
-    async ({ userId }) => {
-      const data = await MovementService.getUserMovements(userId, movementRepo);
-      return ok(data, "Movements fetched successfully");
+    async ({ userId, query }) => {
+      const page = Number(query.page) || 1;
+      const limit = Number(query.limit) || 20;
+
+      const result = await MovementService.getUserMovements(
+        userId,
+        {
+          page,
+          limit,
+          type: query.type,
+          month: query.month ? Number(query.month) : undefined,
+          year: query.year ? Number(query.year) : undefined,
+        },
+        movementRepo,
+      );
+
+      return okPaginated(result.items, result.meta, "Movements fetched successfully");
     },
     {
       auth: true,
+      query: MovementModel.queryParams,
       response: {
-        200: successSchema(
-          MovementModel.movementListResponse,
+        200: paginatedSuccessSchema(
+          MovementModel.movementResponse,
           "Movements fetched",
         ),
         401: errorSchema("Authentication required"),

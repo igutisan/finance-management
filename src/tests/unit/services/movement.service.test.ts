@@ -40,6 +40,7 @@ describe("MovementService", () => {
         })),
         softDelete: mock((id) => Promise.resolve(true)),
         findByUserId: mock(() => Promise.resolve([])),
+        findByUserIdPaginated: mock(() => Promise.resolve({ items: [], total: 0 })),
     } as unknown as MovementRepository;
 
 

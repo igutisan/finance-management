@@ -12,9 +12,12 @@ export { ErrorCode, ErrorDefaults } from "./error-codes";
 export {
   ok,
   created,
+  okPaginated,
   successSchema,
+  paginatedSuccessSchema,
   errorSchema,
   validationErrorSchema,
   type SuccessEnvelope,
+  type PaginatedSuccessEnvelope,
   type ErrorEnvelope,
 } from "./api-response";

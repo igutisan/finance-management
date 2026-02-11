@@ -20,6 +20,10 @@ import type { UserRepository } from "../user/repository";
 import type { MovementRepository } from "../movement/repository";
 import type { BudgetModel } from "./model";
 import { ApiError, ErrorCode } from "../../shared/responses";
+import {
+  type PaginatedResult,
+  buildPaginationMeta,
+} from "../../shared/types/pagination.types";
 
 export abstract class BudgetService {
   /**
@@ -49,8 +53,9 @@ export abstract class BudgetService {
       throw new ApiError(ErrorCode.INVALID_DATE_RANGE);
     }
 
-    // Validate amount
-    if (Number(data.amount) <= 0) {
+    // Validate amount is a valid positive number
+    const parsedAmount = Number(data.amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new ApiError(ErrorCode.INVALID_AMOUNT);
     }
 
@@ -95,14 +100,27 @@ export abstract class BudgetService {
   }
 
   /**
-   * Get all budgets for a user
+   * Get all budgets for a user (paginated + filtered)
    */
   static async getUserBudgets(
     userId: string,
+    options: {
+      page: number;
+      limit: number;
+      category?: string;
+      isActive?: boolean;
+    },
     budgetRepo: BudgetRepository,
-  ): Promise<BudgetModel.BudgetResponse[]> {
-    const budgets = await budgetRepo.findByUserId(userId);
-    return budgets.map((b) => this.toBudgetResponse(b));
+  ): Promise<PaginatedResult<BudgetModel.BudgetResponse>> {
+    const { items, total } = await budgetRepo.findByUserIdPaginated(
+      userId,
+      options,
+    );
+
+    return {
+      items: items.map((b) => this.toBudgetResponse(b)),
+      meta: buildPaginationMeta(total, options.page, options.limit),
+    };
   }
 
   /**
@@ -140,8 +158,11 @@ export abstract class BudgetService {
     }
 
     // Validate amount if provided
-    if (data.amount && Number(data.amount) <= 0) {
-      throw new ApiError(ErrorCode.INVALID_AMOUNT);
+    if (data.amount !== undefined) {
+      const parsedAmount = Number(data.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        throw new ApiError(ErrorCode.INVALID_AMOUNT);
+      }
     }
 
     const budget = await budgetRepo.update(id, data);

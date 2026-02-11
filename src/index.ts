@@ -45,11 +45,14 @@ const app = new Elysia()
     },
   }))
 
-  // ── Feature modules ─────────────────────────────────────────────────
-  .use(user)
-  .use(budget)
-  .use(movement)
-  .use(token)
+  // ── Feature modules (grouped under /api) ───────────────────────────
+  .group("/api", (app) =>
+    app
+      .use(user)
+      .use(budget)
+      .use(movement)
+      .use(token)
+  )
 
   .listen(process.env.APP_PORT || 3002);
 

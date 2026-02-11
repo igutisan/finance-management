@@ -4,7 +4,7 @@
  * Data access layer for Movement entity using Drizzle ORM.
  */
 
-import { eq, and, isNull, gte, lte, sum } from 'drizzle-orm';
+import { eq, and, isNull, gte, lte, sum, count, type SQL } from 'drizzle-orm';
 import type { Database } from '../../shared/db';
 import { movements } from '../../shared/db/schema';
 import type { Movement, NewMovement } from '../../shared/db/schema';
@@ -34,6 +34,64 @@ export class MovementRepository {
       .select()
       .from(movements)
       .where(and(eq(movements.userId, userId), isNull(movements.deletedAt)));
+  }
+
+  /**
+   * Paginated + filtered query for user movements.
+   *
+   * Filters: type (INCOME | EXPENSE | TRANSFER), month + year.
+   * Orders by date DESC (most recent first).
+   */
+  async findByUserIdPaginated(
+    userId: string,
+    options: {
+      page: number;
+      limit: number;
+      type?: string;
+      month?: number;
+      year?: number;
+    },
+  ): Promise<{ items: Movement[]; total: number }> {
+    const { page, limit, type, month, year } = options;
+    const offset = (page - 1) * limit;
+
+    // Build dynamic conditions
+    const conditions: SQL[] = [
+      eq(movements.userId, userId),
+      isNull(movements.deletedAt),
+    ];
+
+    if (type) {
+      conditions.push(eq(movements.type, type as 'INCOME' | 'EXPENSE' | 'TRANSFER'));
+    }
+
+    if (month && year) {
+      const startOfMonth = new Date(year, month - 1, 1);
+      const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+      conditions.push(gte(movements.date, startOfMonth));
+      conditions.push(lte(movements.date, endOfMonth));
+    }
+
+    const whereClause = and(...conditions);
+
+    // Count total matching records
+    const countResult = await this.db
+      .select({ total: count() })
+      .from(movements)
+      .where(whereClause);
+
+    const total = Number(countResult[0]?.total || 0);
+
+    // Fetch paginated items
+    const items = await this.db
+      .select()
+      .from(movements)
+      .where(whereClause)
+      .orderBy(movements.date)
+      .limit(limit)
+      .offset(offset);
+
+    return { items, total };
   }
 
   async findByBudgetId(budgetId: string, userId: string): Promise<Movement[]> {

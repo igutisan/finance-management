@@ -23,7 +23,9 @@ import { authPlugin } from "../../shared/plugins";
 import {
   ok,
   created,
+  okPaginated,
   successSchema,
+  paginatedSuccessSchema,
   errorSchema,
   validationErrorSchema,
 } from "../../shared/responses";
@@ -64,18 +66,39 @@ export const budget = new Elysia({ prefix: "/budgets" })
   )
 
   /**
-   * GET /budgets - Get all user budgets
+   * GET /budgets - Get all user budgets (paginated + filtered)
+   *
+   * Query params: ?page=1&limit=20&category=Food&isActive=true
    */
   .get(
     "/",
-    async ({ userId }) => {
-      const data = await BudgetService.getUserBudgets(userId, budgetRepo);
-      return ok(data, "Budgets fetched successfully");
+    async ({ userId, query }) => {
+      const page = Number(query.page) || 1;
+      const limit = Number(query.limit) || 20;
+
+      const result = await BudgetService.getUserBudgets(
+        userId,
+        {
+          page,
+          limit,
+          category: query.category,
+          isActive: query.isActive !== undefined
+            ? Boolean(query.isActive)
+            : undefined,
+        },
+        budgetRepo,
+      );
+
+      return okPaginated(result.items, result.meta, "Budgets fetched successfully");
     },
     {
       auth: true,
+      query: BudgetModel.queryParams,
       response: {
-        200: successSchema(BudgetModel.budgetListResponse, "Budgets fetched"),
+        200: paginatedSuccessSchema(
+          BudgetModel.budgetResponse,
+          "Budgets fetched",
+        ),
         401: errorSchema("Authentication required"),
       },
     },

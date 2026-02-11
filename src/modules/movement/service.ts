@@ -21,6 +21,10 @@ import type { UserRepository } from "../user/repository";
 import type { BudgetRepository } from "../budget/repository";
 import type { MovementModel } from "./model";
 import { ApiError, ErrorCode } from "../../shared/responses";
+import {
+  type PaginatedResult,
+  buildPaginationMeta,
+} from "../../shared/types/pagination.types";
 
 export abstract class MovementService {
   /**
@@ -55,8 +59,9 @@ export abstract class MovementService {
       }
     }
 
-    // Validate amount
-    if (Number(data.amount) <= 0) {
+    // Validate amount is a valid positive number
+    const parsedAmount = Number(data.amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new ApiError(ErrorCode.INVALID_AMOUNT);
     }
 
@@ -103,14 +108,28 @@ export abstract class MovementService {
   }
 
   /**
-   * Get all movements for a user
+   * Get all movements for a user (paginated + filtered)
    */
   static async getUserMovements(
     userId: string,
+    options: {
+      page: number;
+      limit: number;
+      type?: string;
+      month?: number;
+      year?: number;
+    },
     movementRepo: MovementRepository,
-  ): Promise<MovementModel.MovementResponse[]> {
-    const movements = await movementRepo.findByUserId(userId);
-    return movements.map((m) => this.toMovementResponse(m));
+  ): Promise<PaginatedResult<MovementModel.MovementResponse>> {
+    const { items, total } = await movementRepo.findByUserIdPaginated(
+      userId,
+      options,
+    );
+
+    return {
+      items: items.map((m) => this.toMovementResponse(m)),
+      meta: buildPaginationMeta(total, options.page, options.limit),
+    };
   }
 
   /**
@@ -154,8 +173,11 @@ export abstract class MovementService {
     }
 
     // Validate amount if provided
-    if (data.amount && Number(data.amount) <= 0) {
-      throw new ApiError(ErrorCode.INVALID_AMOUNT);
+    if (data.amount !== undefined) {
+      const parsedAmount = Number(data.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        throw new ApiError(ErrorCode.INVALID_AMOUNT);
+      }
     }
 
     const updateData: any = { ...data };

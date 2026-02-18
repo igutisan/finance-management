@@ -94,11 +94,11 @@ export class MovementRepository {
     return { items, total };
   }
 
-  async findByBudgetId(budgetId: string, userId: string): Promise<Movement[]> {
+  async findByPeriodId(periodId: string, userId: string): Promise<Movement[]> {
     return await this.db
       .select()
       .from(movements)
-      .where(and(eq(movements.budgetId, budgetId), eq(movements.userId, userId), isNull(movements.deletedAt)));
+      .where(and(eq(movements.periodId, periodId), eq(movements.userId, userId), isNull(movements.deletedAt)));
   }
 
   async findByType(type: 'INCOME' | 'EXPENSE' | 'TRANSFER'): Promise<Movement[]> {
@@ -106,13 +106,6 @@ export class MovementRepository {
       .select()
       .from(movements)
       .where(and(eq(movements.type, type), isNull(movements.deletedAt)));
-  }
-
-  async findByCategory(category: string): Promise<Movement[]> {
-    return await this.db
-      .select()
-      .from(movements)
-      .where(and(eq(movements.category, category), isNull(movements.deletedAt)));
   }
 
   async findByDateRange(startDate: Date, endDate: Date): Promise<Movement[]> {
@@ -143,13 +136,13 @@ export class MovementRepository {
     return Number(result[0]?.total || 0);
   }
 
-  async getBudgetTotalSpent(budgetId: string, userId: string): Promise<number> {
+  async getPeriodTotalSpent(periodId: string, userId: string): Promise<number> {
     const result = await this.db
       .select({ total: sum(movements.amount) })
       .from(movements)
       .where(
         and(
-          eq(movements.budgetId, budgetId),
+          eq(movements.periodId, periodId),
           eq(movements.userId, userId),
           eq(movements.type, 'EXPENSE'),
           isNull(movements.deletedAt)

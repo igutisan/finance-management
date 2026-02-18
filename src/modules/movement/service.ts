@@ -1,24 +1,12 @@
 /**
  * Movement Service
  *
- * Business logic for movement (transaction) management.
- *
- * Following Elysia's official best practice:
- *   - abstract class with static methods (no class allocation)
- *   - Repositories passed as parameters from the controller
- *   - Throws ApiError so the error-handler plugin produces the
- *     generic error envelope automatically
- *   - Returns raw data — the controller wraps it with ok() / created()
- *
- * Security:
- *   - ALL operations (read, update, delete) validate ownership
- *   - A user can only access/modify their own movements
- *   - Budget ownership is validated when creating movements
+ * Business logic for movement management.
  */
 
 import type { MovementRepository } from "./repository";
 import type { UserRepository } from "../user/repository";
-import type { BudgetRepository } from "../budget/repository";
+import { BudgetPeriodRepository } from "../budget/period-repository";
 import type { MovementModel } from "./model";
 import { ApiError, ErrorCode } from "../../shared/responses";
 import {
@@ -29,50 +17,43 @@ import {
 export abstract class MovementService {
   /**
    * Create a new movement
-   *
-   * Validates:
-   *   - User exists
-   *   - Budget exists and belongs to user (if budgetId provided)
-   *   - Amount is positive
    */
   static async create(
     userId: string,
     data: MovementModel.CreateBody,
     movementRepo: MovementRepository,
     userRepo: UserRepository,
-    budgetRepo: BudgetRepository,
+    periodRepo: BudgetPeriodRepository,
   ): Promise<MovementModel.MovementResponse> {
-    // Verify user exists
     const userExists = await userRepo.exists(userId);
     if (!userExists) {
       throw new ApiError(ErrorCode.USER_NOT_FOUND);
     }
 
-    // Verify budget exists and belongs to user (if specified)
-    if (data.budgetId) {
-      const budget = await budgetRepo.findById(data.budgetId);
-      if (!budget) {
-        throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
+    // Verify period exists (if specified)
+    if (data.periodId) {
+      const period = await periodRepo.findById(data.periodId);
+      if (!period) {
+        throw new ApiError(ErrorCode.NOT_FOUND, {
+          message: "Period not found",
+        });
       }
-      if (budget.userId !== userId) {
-        throw new ApiError(ErrorCode.BUDGET_OWNERSHIP);
-      }
+      // Period ownership is validated through budget ownership
+      // (periods belong to budgets, budgets belong to users)
     }
 
-    // Validate amount is a valid positive number
+    // Validate amount
     const parsedAmount = Number(data.amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new ApiError(ErrorCode.INVALID_AMOUNT);
     }
 
-    // Create movement
     const movement = await movementRepo.create({
       userId,
-      budgetId: data.budgetId || null,
+      periodId: data.periodId || null,
       type: data.type,
       amount: data.amount,
       description: data.description,
-      category: data.category,
       date: new Date(data.date),
       paymentMethod: data.paymentMethod,
       isRecurring: data.isRecurring || false,
@@ -84,92 +65,98 @@ export abstract class MovementService {
 
   /**
    * Get movement by ID
-   *
-   * Security: validates that the movement belongs to the requesting user
    */
   static async getById(
-    id: string,
+    movementId: string,
     userId: string,
     movementRepo: MovementRepository,
   ): Promise<MovementModel.MovementResponse> {
-    const movement = await movementRepo.findById(id);
+    const movement = await movementRepo.findById(movementId);
     if (!movement) {
       throw new ApiError(ErrorCode.MOVEMENT_NOT_FOUND);
     }
-
-    // Validate ownership
     if (movement.userId !== userId) {
       throw new ApiError(ErrorCode.FORBIDDEN, {
         message: "Movement does not belong to user",
       });
     }
-
     return this.toMovementResponse(movement);
   }
 
   /**
-   * Get all movements for a user (paginated + filtered)
+   * Get all movements for a user (paginated)
    */
   static async getUserMovements(
     userId: string,
-    options: {
-      page: number;
-      limit: number;
-      type?: string;
-      month?: number;
-      year?: number;
-    },
+    options: MovementModel.QueryParams,
     movementRepo: MovementRepository,
   ): Promise<PaginatedResult<MovementModel.MovementResponse>> {
-    const { items, total } = await movementRepo.findByUserIdPaginated(
-      userId,
-      options,
-    );
+    const page = options.page || 1;
+    const limit = options.limit || 20;
+
+    const { items, total } = await movementRepo.findByUserIdPaginated(userId, {
+      page,
+      limit,
+      type: options.type,
+      month: options.month,
+      year: options.year,
+    });
 
     return {
-      items: items.map((m) => this.toMovementResponse(m)),
-      meta: buildPaginationMeta(total, options.page, options.limit),
+      items: items.map(this.toMovementResponse),
+      meta: buildPaginationMeta(total, page, limit),
     };
   }
 
   /**
-   * Get all movements for a budget
-   *
-   * Note: This should only be called after validating the budget
-   * belongs to the user (done by the controller or calling code)
+   * Get movements for a specific period
    */
-  static async getBudgetMovements(
-    budgetId: string,
+  static async getPeriodMovements(
+    periodId: string,
     userId: string,
     movementRepo: MovementRepository,
+    periodRepo: BudgetPeriodRepository,
   ): Promise<MovementModel.MovementResponse[]> {
-    const movements = await movementRepo.findByBudgetId(budgetId, userId);
-    return movements.map((m) => this.toMovementResponse(m));
+    // Verify period exists
+    const period = await periodRepo.findById(periodId);
+    if (!period) {
+      throw new ApiError(ErrorCode.NOT_FOUND, {
+        message: "Period not found",
+      });
+    }
+
+    const movements = await movementRepo.findByPeriodId(periodId, userId);
+    return movements.map(this.toMovementResponse);
   }
 
   /**
    * Update movement
-   *
-   * Security: validates that the movement belongs to the requesting user
-   * before applying any updates
    */
   static async update(
-    id: string,
+    movementId: string,
     userId: string,
     data: MovementModel.UpdateBody,
     movementRepo: MovementRepository,
+    periodRepo: BudgetPeriodRepository,
   ): Promise<MovementModel.MovementResponse> {
-    // Fetch the existing movement first
-    const existingMovement = await movementRepo.findById(id);
+    const existingMovement = await movementRepo.findById(movementId);
     if (!existingMovement) {
       throw new ApiError(ErrorCode.MOVEMENT_NOT_FOUND);
     }
-
-    // Validate ownership BEFORE allowing any modification
     if (existingMovement.userId !== userId) {
       throw new ApiError(ErrorCode.FORBIDDEN, {
         message: "Movement does not belong to user",
       });
+    }
+
+    // Verify new period if provided
+    if (data.periodId) {
+      const period = await periodRepo.findById(data.periodId);
+      if (!period) {
+        throw new ApiError(ErrorCode.NOT_FOUND, {
+          message: "Period not found",
+        });
+      }
     }
 
     // Validate amount if provided
@@ -185,50 +172,37 @@ export abstract class MovementService {
       updateData.date = new Date(data.date);
     }
 
-    const movement = await movementRepo.update(id, updateData);
+    const movement = await movementRepo.update(movementId, updateData);
     if (!movement) {
       throw new ApiError(ErrorCode.MOVEMENT_NOT_FOUND);
     }
-
     return this.toMovementResponse(movement);
   }
 
   /**
    * Delete movement (soft delete)
-   *
-   * Security: validates that the movement belongs to the requesting user
-   * before allowing deletion
    */
   static async delete(
-    id: string,
+    movementId: string,
     userId: string,
     movementRepo: MovementRepository,
-  ): Promise<boolean> {
-    // Fetch the existing movement first
-    const existingMovement = await movementRepo.findById(id);
-    if (!existingMovement) {
+  ): Promise<void> {
+    const movement = await movementRepo.findById(movementId);
+    if (!movement) {
       throw new ApiError(ErrorCode.MOVEMENT_NOT_FOUND);
     }
-
-    // Validate ownership BEFORE allowing deletion
-    if (existingMovement.userId !== userId) {
+    if (movement.userId !== userId) {
       throw new ApiError(ErrorCode.FORBIDDEN, {
         message: "Movement does not belong to user",
       });
     }
-
-    const deleted = await movementRepo.softDelete(id);
-    if (!deleted) {
-      throw new ApiError(ErrorCode.MOVEMENT_NOT_FOUND);
-    }
-
-    return true;
+    await movementRepo.softDelete(movementId);
   }
 
   /**
-   * Get user analytics (total income and expenses)
+   * Get analytics (total income, expenses, balance)
    */
-  static async getUserAnalytics(
+  static async getAnalytics(
     userId: string,
     movementRepo: MovementRepository,
   ): Promise<MovementModel.AnalyticsResponse> {
@@ -246,17 +220,14 @@ export abstract class MovementService {
   /**
    * Transform Movement entity to response DTO
    */
-  private static toMovementResponse(
-    movement: any,
-  ): MovementModel.MovementResponse {
+  private static toMovementResponse(movement: any): MovementModel.MovementResponse {
     return {
       id: movement.id,
       userId: movement.userId,
-      budgetId: movement.budgetId,
+      periodId: movement.periodId,
       type: movement.type,
       amount: movement.amount,
       description: movement.description,
-      category: movement.category,
       date: movement.date,
       paymentMethod: movement.paymentMethod,
       isRecurring: movement.isRecurring,

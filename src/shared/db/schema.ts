@@ -7,8 +7,9 @@
 import { pgTable, uuid, varchar, text, boolean, timestamp, numeric, date, pgEnum, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
-// Movement type enum
+// Enums
 export const movementTypeEnum = pgEnum('movement_type', ['INCOME', 'EXPENSE', 'TRANSFER']);
+export const recurrenceTypeEnum = pgEnum('recurrence_type', ['NONE', 'WEEKLY', 'BIWEEKLY', 'MONTHLY']);
 
 // Users table
 export const users = pgTable('users', {
@@ -40,16 +41,14 @@ export const refreshTokens = pgTable('refresh_tokens', {
   expiresAtIdx: index('idx_refresh_tokens_expires_at').on(table.expiresAt),
 }));
 
-// Budgets table
+// Budgets table (now a template for recurring budgets)
 export const budgets = pgTable('budgets', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 200 }).notNull(),
   description: text('description'),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
-  category: varchar('category', { length: 100 }).notNull(),
-  startDate: date('start_date').notNull(),
-  endDate: date('end_date').notNull(),
+  recurrence: recurrenceTypeEnum('recurrence').default('NONE').notNull(),
   currency: varchar('currency', { length: 3 }).default('USD').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -57,15 +56,26 @@ export const budgets = pgTable('budgets', {
   deletedAt: timestamp('deleted_at'),
 });
 
+// Budget Periods table (individual periods for each budget)
+export const budgetPeriods = pgTable('budget_periods', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  budgetId: uuid('budget_id').notNull().references(() => budgets.id, { onDelete: 'cascade' }),
+  startDate: date('start_date').notNull(),
+  endDate: date('end_date').notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Movements table
 export const movements = pgTable('movements', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  budgetId: uuid('budget_id').references(() => budgets.id, { onDelete: 'set null' }),
+  periodId: uuid('period_id').references(() => budgetPeriods.id, { onDelete: 'set null' }),
   type: movementTypeEnum('type').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   description: varchar('description', { length: 500 }).notNull(),
-  category: varchar('category', { length: 100 }).notNull(),
   date: timestamp('date').notNull(),
   paymentMethod: varchar('payment_method', { length: 100 }),
   isRecurring: boolean('is_recurring').default(false).notNull(),
@@ -86,6 +96,14 @@ export const budgetsRelations = relations(budgets, ({ one, many }) => ({
     fields: [budgets.userId],
     references: [users.id],
   }),
+  periods: many(budgetPeriods),
+}));
+
+export const budgetPeriodsRelations = relations(budgetPeriods, ({ one, many }) => ({
+  budget: one(budgets, {
+    fields: [budgetPeriods.budgetId],
+    references: [budgets.id],
+  }),
   movements: many(movements),
 }));
 
@@ -94,9 +112,9 @@ export const movementsRelations = relations(movements, ({ one }) => ({
     fields: [movements.userId],
     references: [users.id],
   }),
-  budget: one(budgets, {
-    fields: [movements.budgetId],
-    references: [budgets.id],
+  period: one(budgetPeriods, {
+    fields: [movements.periodId],
+    references: [budgetPeriods.id],
   }),
 }));
 
@@ -106,6 +124,9 @@ export type NewUser = typeof users.$inferInsert;
 
 export type Budget = typeof budgets.$inferSelect;
 export type NewBudget = typeof budgets.$inferInsert;
+
+export type BudgetPeriod = typeof budgetPeriods.$inferSelect;
+export type NewBudgetPeriod = typeof budgetPeriods.$inferInsert;
 
 export type Movement = typeof movements.$inferSelect;
 export type NewMovement = typeof movements.$inferInsert;

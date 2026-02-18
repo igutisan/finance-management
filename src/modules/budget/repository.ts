@@ -39,7 +39,7 @@ export class BudgetRepository {
   /**
    * Paginated + filtered query for user budgets.
    *
-   * Filters: category, isActive.
+   * Filters: isActive.
    * Orders by createdAt DESC.
    */
   async findByUserIdPaginated(
@@ -47,21 +47,16 @@ export class BudgetRepository {
     options: {
       page: number;
       limit: number;
-      category?: string;
       isActive?: boolean;
     },
   ): Promise<{ items: Budget[]; total: number }> {
-    const { page, limit, category, isActive } = options;
+    const { page, limit, isActive } = options;
     const offset = (page - 1) * limit;
 
     const conditions: SQL[] = [
       eq(budgets.userId, userId),
       isNull(budgets.deletedAt),
     ];
-
-    if (category) {
-      conditions.push(eq(budgets.category, category));
-    }
 
     if (isActive !== undefined) {
       conditions.push(eq(budgets.isActive, isActive));
@@ -87,13 +82,6 @@ export class BudgetRepository {
     return { items, total };
   }
 
-  async findByCategory(category: string): Promise<Budget[]> {
-    return await this.db
-      .select()
-      .from(budgets)
-      .where(and(eq(budgets.category, category), isNull(budgets.deletedAt)));
-  }
-
   async findActiveByUserId(userId: string): Promise<Budget[]> {
     return await this.db
       .select()
@@ -102,19 +90,6 @@ export class BudgetRepository {
         and(
           eq(budgets.userId, userId),
           eq(budgets.isActive, true),
-          isNull(budgets.deletedAt)
-        )
-      );
-  }
-
-  async findByDateRange(startDate: Date, endDate: Date): Promise<Budget[]> {
-    return await this.db
-      .select()
-      .from(budgets)
-      .where(
-        and(
-          gte(budgets.startDate, startDate.toISOString().split('T')[0]),
-          lte(budgets.endDate, endDate.toISOString().split('T')[0]),
           isNull(budgets.deletedAt)
         )
       );

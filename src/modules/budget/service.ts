@@ -1,59 +1,46 @@
 /**
  * Budget Service
  *
- * Business logic for budget management.
- *
- * Following Elysia's official best practice:
- *   - abstract class with static methods (no class allocation)
- *   - Repositories passed as parameters from the controller
- *   - Throws ApiError so the error-handler plugin produces the
- *     generic error envelope automatically
- *   - Returns raw data — the controller wraps it with ok() / created()
- *
- * Security:
- *   - ALL operations (read, update, delete) validate ownership
- *   - A user can only access/modify their own budgets
+ * Business logic for budget management with recurring budgets.
  */
 
 import type { BudgetRepository } from "./repository";
 import type { UserRepository } from "../user/repository";
 import type { MovementRepository } from "../movement/repository";
+import { BudgetPeriodRepository } from "./period-repository";
 import type { BudgetModel } from "./model";
 import { ApiError, ErrorCode } from "../../shared/responses";
 import {
   type PaginatedResult,
   buildPaginationMeta,
 } from "../../shared/types/pagination.types";
+import { generatePeriods, type RecurrenceType } from "./period-generator";
+import type { BudgetPeriod } from "../../shared/db/schema";
 
 export abstract class BudgetService {
   /**
-   * Create a new budget
-   *
-   * Validates:
-   *   - User exists
-   *   - End date is after start date
-   *   - Amount is positive
+   * Create a new budget with period generation
    */
   static async create(
     userId: string,
     data: BudgetModel.CreateBody,
     budgetRepo: BudgetRepository,
     userRepo: UserRepository,
-  ): Promise<BudgetModel.BudgetResponse> {
-    // Verify user exists
+    periodRepo: BudgetPeriodRepository,
+  ): Promise<BudgetModel.BudgetWithPeriodsResponse> {
     const userExists = await userRepo.exists(userId);
     if (!userExists) {
       throw new ApiError(ErrorCode.USER_NOT_FOUND);
     }
 
-    // Validate dates
-    const startDate = new Date(data.startDate);
-    const endDate = new Date(data.endDate);
-    if (endDate < startDate) {
-      throw new ApiError(ErrorCode.INVALID_DATE_RANGE);
+    // Validate recurrence + dates
+    if (data.recurrence === "NONE" && !data.endDate) {
+      throw new ApiError(ErrorCode.INVALID_DATE_RANGE, {
+        message: "endDate is required for NONE recurrence",
+      });
     }
 
-    // Validate amount is a valid positive number
+    // Validate amount
     const parsedAmount = Number(data.amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new ApiError(ErrorCode.INVALID_AMOUNT);
@@ -65,96 +52,95 @@ export abstract class BudgetService {
       name: data.name,
       description: data.description,
       amount: data.amount,
-      category: data.category,
-      startDate: data.startDate,
-      endDate: data.endDate,
+      recurrence: data.recurrence,
       currency: data.currency || "USD",
     });
 
-    return this.toBudgetResponse(budget);
+    // Generate periods
+    const periodsToGenerate = data.periodsToGenerate || 12;
+    const periodData = generatePeriods(
+      data.startDate,
+      data.endDate || null,
+      data.recurrence as RecurrenceType,
+      data.amount,
+      periodsToGenerate,
+    );
+
+    const periods = await periodRepo.createMany(
+      periodData.map((p) => ({
+        budgetId: budget.id,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        amount: p.amount,
+      }))
+    );
+
+    return {
+      budget: this.toBudgetResponse(budget),
+      periods: periods.map(this.toPeriodResponse),
+    };
   }
 
   /**
    * Get budget by ID
-   *
-   * Security: validates that the budget belongs to the requesting user
    */
   static async getById(
-    id: string,
+    budgetId: string,
     userId: string,
     budgetRepo: BudgetRepository,
   ): Promise<BudgetModel.BudgetResponse> {
-    const budget = await budgetRepo.findById(id);
+    const budget = await budgetRepo.findById(budgetId);
     if (!budget) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
-
-    // Validate ownership
     if (budget.userId !== userId) {
       throw new ApiError(ErrorCode.FORBIDDEN, {
         message: "Budget does not belong to user",
       });
     }
-
     return this.toBudgetResponse(budget);
   }
 
   /**
-   * Get all budgets for a user (paginated + filtered)
+   * Get all budgets for a user (paginated)
    */
   static async getUserBudgets(
     userId: string,
-    options: {
-      page: number;
-      limit: number;
-      category?: string;
-      isActive?: boolean;
-    },
+    options: BudgetModel.QueryParams,
     budgetRepo: BudgetRepository,
   ): Promise<PaginatedResult<BudgetModel.BudgetResponse>> {
-    const { items, total } = await budgetRepo.findByUserIdPaginated(
-      userId,
-      options,
-    );
+    const page = options.page || 1;
+    const limit = options.limit || 20;
+
+    const { items, total } = await budgetRepo.findByUserIdPaginated(userId, {
+      page,
+      limit,
+      isActive: options.isActive,
+    });
 
     return {
-      items: items.map((b) => this.toBudgetResponse(b)),
-      meta: buildPaginationMeta(total, options.page, options.limit),
+      items: items.map(this.toBudgetResponse),
+      meta: buildPaginationMeta(total, page, limit),
     };
   }
 
   /**
    * Update budget
-   *
-   * Security: validates that the budget belongs to the requesting user
-   * before applying any updates
    */
   static async update(
-    id: string,
+    budgetId: string,
     userId: string,
     data: BudgetModel.UpdateBody,
     budgetRepo: BudgetRepository,
   ): Promise<BudgetModel.BudgetResponse> {
-    // Fetch the existing budget first
-    const existingBudget = await budgetRepo.findById(id);
+    const existingBudget = await budgetRepo.findById(budgetId);
     if (!existingBudget) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
-
-    // Validate ownership BEFORE allowing any modification
     if (existingBudget.userId !== userId) {
       throw new ApiError(ErrorCode.FORBIDDEN, {
         message: "Budget does not belong to user",
       });
-    }
-
-    // Validate dates if both are provided
-    if (data.startDate && data.endDate) {
-      const startDate = new Date(data.startDate);
-      const endDate = new Date(data.endDate);
-      if (endDate < startDate) {
-        throw new ApiError(ErrorCode.INVALID_DATE_RANGE);
-      }
     }
 
     // Validate amount if provided
@@ -165,83 +151,184 @@ export abstract class BudgetService {
       }
     }
 
-    const budget = await budgetRepo.update(id, data);
+    const budget = await budgetRepo.update(budgetId, data);
     if (!budget) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
-
     return this.toBudgetResponse(budget);
   }
 
   /**
    * Delete budget (soft delete)
-   *
-   * Security: validates that the budget belongs to the requesting user
-   * before allowing deletion
    */
   static async delete(
-    id: string,
+    budgetId: string,
     userId: string,
     budgetRepo: BudgetRepository,
-  ): Promise<boolean> {
-    // Fetch the existing budget first
-    const existingBudget = await budgetRepo.findById(id);
-    if (!existingBudget) {
+  ): Promise<void> {
+    const budget = await budgetRepo.findById(budgetId);
+    if (!budget) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
-
-    // Validate ownership BEFORE allowing deletion
-    if (existingBudget.userId !== userId) {
+    if (budget.userId !== userId) {
       throw new ApiError(ErrorCode.FORBIDDEN, {
         message: "Budget does not belong to user",
       });
     }
-
-    const deleted = await budgetRepo.softDelete(id);
-    if (!deleted) {
-      throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
-    }
-
-    return true;
+    await budgetRepo.softDelete(budgetId);
   }
 
   /**
-   * Get budget summary with total spent vs budgeted
-   *
-   * Security: validates that the budget belongs to the requesting user
+   * Get budget summary with current period spending
    */
   static async getSummary(
     budgetId: string,
     userId: string,
     budgetRepo: BudgetRepository,
     movementRepo: MovementRepository,
+    periodRepo: BudgetPeriodRepository,
   ): Promise<BudgetModel.BudgetSummaryResponse> {
     const budget = await budgetRepo.findById(budgetId);
     if (!budget) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
-
-    // Validate ownership
     if (budget.userId !== userId) {
       throw new ApiError(ErrorCode.FORBIDDEN, {
         message: "Budget does not belong to user",
       });
     }
 
-    // Get total spent directly from DB (more efficient)
-    const totalSpent = await movementRepo.getBudgetTotalSpent(budgetId, userId);
+    // Find current period
+    const currentPeriod = await periodRepo.findCurrentPeriod(budgetId, new Date());
 
-    const budgetAmount = Number(budget.amount);
-    const remaining = budgetAmount - totalSpent;
-    const percentageUsed =
-      budgetAmount > 0 ? (totalSpent / budgetAmount) * 100 : 0;
+    if (!currentPeriod) {
+      // No active period for current date
+      return {
+        budget: this.toBudgetResponse(budget),
+        currentPeriod: null,
+        totalSpent: 0,
+        remaining: Number(budget.amount),
+        percentageUsed: 0,
+      };
+    }
+
+    // Get total spent for current period
+    const totalSpent = await movementRepo.getPeriodTotalSpent(currentPeriod.id, userId);
+    const periodAmount = Number(currentPeriod.amount);
+    const remaining = periodAmount - totalSpent;
+    const percentageUsed = periodAmount > 0 ? (totalSpent / periodAmount) * 100 : 0;
 
     return {
       budget: this.toBudgetResponse(budget),
+      currentPeriod: this.toPeriodResponse(currentPeriod),
       totalSpent,
       remaining,
       percentageUsed,
     };
+  }
+
+  /**
+   * Get all periods for a budget
+   */
+  static async getPeriods(
+    budgetId: string,
+    userId: string,
+    budgetRepo: BudgetRepository,
+    periodRepo: BudgetPeriodRepository,
+  ): Promise<BudgetModel.PeriodResponse[]> {
+    const budget = await budgetRepo.findById(budgetId);
+    if (!budget) {
+      throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
+    }
+    if (budget.userId !== userId) {
+      throw new ApiError(ErrorCode.FORBIDDEN);
+    }
+
+    const periods = await periodRepo.findByBudgetId(budgetId);
+    return periods.map(this.toPeriodResponse);
+  }
+
+  /**
+   * Update a specific period
+   */
+  static async updatePeriod(
+    budgetId: string,
+    periodId: string,
+    userId: string,
+    data: BudgetModel.UpdatePeriodBody,
+    budgetRepo: BudgetRepository,
+    periodRepo: BudgetPeriodRepository,
+  ): Promise<BudgetModel.PeriodResponse> {
+    const budget = await budgetRepo.findById(budgetId);
+    if (!budget) {
+      throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
+    }
+    if (budget.userId !== userId) {
+      throw new ApiError(ErrorCode.FORBIDDEN);
+    }
+
+    const period = await periodRepo.findById(periodId);
+    if (!period || period.budgetId !== budgetId) {
+      throw new ApiError(ErrorCode.NOT_FOUND, { message: "Period not found" });
+    }
+
+    const updated = await periodRepo.update(periodId, data);
+    if (!updated) {
+      throw new ApiError(ErrorCode.NOT_FOUND);
+    }
+    return this.toPeriodResponse(updated);
+  }
+
+  /**
+   * Extend periods (generate more)
+   */
+  static async extendPeriods(
+    budgetId: string,
+    userId: string,
+    data: BudgetModel.ExtendPeriodsBody,
+    budgetRepo: BudgetRepository,
+    periodRepo: BudgetPeriodRepository,
+  ): Promise<BudgetModel.PeriodResponse[]> {
+    const budget = await budgetRepo.findById(budgetId);
+    if (!budget) {
+      throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
+    }
+    if (budget.userId !== userId) {
+      throw new ApiError(ErrorCode.FORBIDDEN);
+    }
+    if (budget.recurrence === "NONE") {
+      throw new ApiError(ErrorCode.BAD_REQUEST, {
+        message: "Cannot extend periods for NONE recurrence",
+      });
+    }
+
+    const lastPeriod = await periodRepo.findLastPeriod(budgetId);
+    if (!lastPeriod) {
+      throw new ApiError(ErrorCode.NOT_FOUND, { message: "No periods found" });
+    }
+
+    // Generate new periods starting from day after last period
+    const nextStart = new Date(lastPeriod.endDate);
+    nextStart.setDate(nextStart.getDate() + 1);
+
+    const periodData = generatePeriods(
+      nextStart.toISOString().split("T")[0],
+      null,
+      budget.recurrence as RecurrenceType,
+      budget.amount,
+      data.periodsToGenerate,
+    );
+
+    const newPeriods = await periodRepo.createMany(
+      periodData.map((p) => ({
+        budgetId: budget.id,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        amount: p.amount,
+      }))
+    );
+
+    return newPeriods.map(this.toPeriodResponse);
   }
 
   /**
@@ -254,13 +341,27 @@ export abstract class BudgetService {
       name: budget.name,
       description: budget.description,
       amount: budget.amount,
-      category: budget.category,
-      startDate: budget.startDate,
-      endDate: budget.endDate,
+      recurrence: budget.recurrence,
       currency: budget.currency,
       isActive: budget.isActive,
       createdAt: budget.createdAt,
       updatedAt: budget.updatedAt,
+    };
+  }
+
+  /**
+   * Transform BudgetPeriod entity to response DTO
+   */
+  private static toPeriodResponse(period: BudgetPeriod): BudgetModel.PeriodResponse {
+    return {
+      id: period.id,
+      budgetId: period.budgetId,
+      startDate: period.startDate,
+      endDate: period.endDate,
+      amount: period.amount,
+      isActive: period.isActive,
+      createdAt: period.createdAt,
+      updatedAt: period.updatedAt,
     };
   }
 }

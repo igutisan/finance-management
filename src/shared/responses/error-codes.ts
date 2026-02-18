@@ -9,10 +9,11 @@ export enum ErrorCode {
   // ===== Generic =====
   INTERNAL_ERROR = "INTERNAL_ERROR",
   NOT_FOUND = "NOT_FOUND",
+  BAD_REQUEST = "BAD_REQUEST",
   VALIDATION_ERROR = "VALIDATION_ERROR",
   UNAUTHORIZED = "UNAUTHORIZED",
   FORBIDDEN = "FORBIDDEN",
-
+ 
   // ===== Auth =====
   TOKEN_MISSING = "TOKEN_MISSING",
   TOKEN_INVALID = "TOKEN_INVALID",
@@ -50,6 +51,10 @@ export const ErrorDefaults: Record<
   [ErrorCode.NOT_FOUND]: {
     status: 404,
     message: "Resource not found",
+  },
+  [ErrorCode.BAD_REQUEST]: {
+    status: 400,
+    message: "Bad request",
   },
   [ErrorCode.VALIDATION_ERROR]: {
     status: 422,

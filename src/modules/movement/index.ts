@@ -1,22 +1,14 @@
 /**
  * Movement Controller
  *
- * Elysia routes for movement (transaction) management.
- *
- * Following Elysia's official best practice:
- *   - Repositories instantiated at module level
- *   - Passed as parameters to static service methods
- *   - Success responses wrapped in the generic envelope via ok() / created()
- *   - Errors thrown as ApiError are handled by the error-handler plugin
- *   - Protected routes use the authPlugin macro (`auth: true`)
- *     which injects `userId` into the handler context
+ * Elysia routes for movement management.
  */
 
 import { Elysia } from "elysia";
 import { MovementService } from "./service";
 import { MovementRepository } from "./repository";
+import { BudgetPeriodRepository } from "../budget/period-repository";
 import { UserRepository } from "../user/repository";
-import { BudgetRepository } from "../budget/repository";
 import { MovementModel } from "./model";
 import { db } from "../../shared/db";
 import { authPlugin } from "../../shared/plugins";
@@ -31,8 +23,8 @@ import {
 } from "../../shared/responses";
 
 const movementRepo = new MovementRepository(db);
+const periodRepo = new BudgetPeriodRepository(db);
 const userRepo = new UserRepository(db);
-const budgetRepo = new BudgetRepository(db);
 
 export const movement = new Elysia({ prefix: "/movements" })
   .use(authPlugin)
@@ -48,7 +40,7 @@ export const movement = new Elysia({ prefix: "/movements" })
         body,
         movementRepo,
         userRepo,
-        budgetRepo,
+        periodRepo,
       );
       set.status = 201;
       return created(data, "Movement created successfully");
@@ -59,38 +51,25 @@ export const movement = new Elysia({ prefix: "/movements" })
       response: {
         201: successSchema(MovementModel.movementResponse, "Movement created"),
         400: errorSchema("Invalid amount"),
-        401: errorSchema("Authentication required"),
-        403: errorSchema("Budget does not belong to user"),
-        404: errorSchema("Budget or user not found"),
+        403: errorSchema("Period does not belong to user"),
+        404: errorSchema("User or period not found"),
         422: validationErrorSchema(),
       },
     },
   )
 
   /**
-   * GET /movements - Get all user movements (paginated + filtered)
-   *
-   * Query params: ?page=1&limit=20&type=EXPENSE&month=2&year=2026
+   * GET /movements - Get all movements for authenticated user (paginated)
    */
   .get(
     "/",
-    async ({ userId, query }) => {
-      const page = Number(query.page) || 1;
-      const limit = Number(query.limit) || 20;
-
+    async ({ query, userId }) => {
       const result = await MovementService.getUserMovements(
         userId,
-        {
-          page,
-          limit,
-          type: query.type,
-          month: query.month ? Number(query.month) : undefined,
-          year: query.year ? Number(query.year) : undefined,
-        },
+        query,
         movementRepo,
       );
-
-      return okPaginated(result.items, result.meta, "Movements fetched successfully");
+      return okPaginated(result.items, result.meta, "Movements retrieved");
     },
     {
       auth: true,
@@ -98,9 +77,10 @@ export const movement = new Elysia({ prefix: "/movements" })
       response: {
         200: paginatedSuccessSchema(
           MovementModel.movementResponse,
-          "Movements fetched",
+          "Movements retrieved",
         ),
-        401: errorSchema("Authentication required"),
+        401: errorSchema("Unauthorized"),
+        422: validationErrorSchema(),
       },
     },
   )
@@ -116,35 +96,34 @@ export const movement = new Elysia({ prefix: "/movements" })
         userId,
         movementRepo,
       );
-      return ok(data, "Movement fetched successfully");
+      return ok(data, "Movement retrieved");
     },
     {
       auth: true,
       response: {
-        200: successSchema(MovementModel.movementResponse, "Movement fetched"),
-        401: errorSchema("Authentication required"),
+        200: successSchema(MovementModel.movementResponse, "Movement retrieved"),
+        403: errorSchema("Movement does not belong to user"),
         404: errorSchema("Movement not found"),
       },
     },
   )
 
   /**
-   * GET /movements/analytics - Get user analytics
+   * GET /movements/analytics - Get analytics (income, expenses, balance)
    */
   .get(
     "/analytics",
     async ({ userId }) => {
-      const data = await MovementService.getUserAnalytics(userId, movementRepo);
-      return ok(data, "Analytics fetched successfully");
+      const data = await MovementService.getAnalytics(userId, movementRepo);
+      return ok(data, "Analytics retrieved");
     },
     {
       auth: true,
       response: {
         200: successSchema(
           MovementModel.analyticsResponse,
-          "Analytics fetched",
+          "Analytics retrieved",
         ),
-        401: errorSchema("Authentication required"),
       },
     },
   )
@@ -160,8 +139,9 @@ export const movement = new Elysia({ prefix: "/movements" })
         userId,
         body,
         movementRepo,
+        periodRepo,
       );
-      return ok(data, "Movement updated successfully");
+      return ok(data, "Movement updated");
     },
     {
       auth: true,
@@ -169,28 +149,26 @@ export const movement = new Elysia({ prefix: "/movements" })
       response: {
         200: successSchema(MovementModel.movementResponse, "Movement updated"),
         400: errorSchema("Invalid amount"),
-        401: errorSchema("Authentication required"),
         403: errorSchema("Movement does not belong to user"),
-        404: errorSchema("Movement not found"),
+        404: errorSchema("Movement or period not found"),
         422: validationErrorSchema(),
       },
     },
   )
 
   /**
-   * DELETE /movements/:id - Delete movement
+   * DELETE /movements/:id - Delete movement (soft delete)
    */
   .delete(
     "/:id",
     async ({ params, userId }) => {
       await MovementService.delete(params.id, userId, movementRepo);
-      return ok(null, "Movement deleted successfully");
+      return ok(null, "Movement deleted");
     },
     {
       auth: true,
       response: {
         200: successSchema(MovementModel.deleteResponse, "Movement deleted"),
-        401: errorSchema("Authentication required"),
         403: errorSchema("Movement does not belong to user"),
         404: errorSchema("Movement not found"),
       },

@@ -30,7 +30,8 @@ export namespace MovementModel {
 
 
   export const createBody = t.Object({
-    periodId: t.Optional(t.String()),
+    budgetId: t.Optional(t.String()),  
+    periodId: t.Optional(t.String()),   
     type: t.Union([
       t.Literal("INCOME"),
       t.Literal("EXPENSE"),
@@ -47,6 +48,7 @@ export namespace MovementModel {
   export type CreateBody = typeof createBody.static;
 
   export const updateBody = t.Object({
+    budgetId: t.Optional(t.String()),
     periodId: t.Optional(t.String()),
     type: t.Optional(
       t.Union([
@@ -81,6 +83,7 @@ export namespace MovementModel {
     date: t.Date(),
     paymentMethod: t.Nullable(t.String()),
     isRecurring: t.Boolean(),
+    budgetName: t.Nullable(t.String()),
     tags: t.Nullable(t.Array(t.String())),
     createdAt: t.Date(),
     updatedAt: t.Date(),

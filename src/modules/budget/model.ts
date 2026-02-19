@@ -125,6 +125,34 @@ export namespace BudgetModel {
   export type BudgetListResponse = typeof budgetListResponse.static;
 
   /**
+   * Enriched budget for list view — includes current period spending
+   * so the frontend can render progress bars without extra requests.
+   */
+  export const budgetCardResponse = t.Object({
+    id: t.String(),
+    userId: t.String(),
+    name: t.String(),
+    description: t.Nullable(t.String()),
+    amount: t.String(),
+    recurrence: t.Union([
+      t.Literal("NONE"),
+      t.Literal("WEEKLY"),
+      t.Literal("BIWEEKLY"),
+      t.Literal("MONTHLY"),
+    ]),
+    currency: t.String(),
+    isActive: t.Boolean(),
+    currentPeriod: t.Nullable(periodResponse),
+    totalSpent: t.Number(),
+    remaining: t.Number(),
+    percentageUsed: t.Number(),
+    createdAt: t.Date(),
+    updatedAt: t.Date(),
+  });
+
+  export type BudgetCardResponse = typeof budgetCardResponse.static;
+
+  /**
    * Delete response (null data — the message lives in the envelope)
    */
   export const deleteResponse = t.Null();

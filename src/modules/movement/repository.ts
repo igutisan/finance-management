@@ -6,8 +6,11 @@
 
 import { eq, and, isNull, gte, lte, sum, count, type SQL } from 'drizzle-orm';
 import type { Database } from '../../shared/db';
-import { movements } from '../../shared/db/schema';
+import { movements, budgetPeriods, budgets } from '../../shared/db/schema';
 import type { Movement, NewMovement } from '../../shared/db/schema';
+
+/** Movement enriched with the parent budget name (null if not linked to a period) */
+export type MovementWithBudget = Movement & { budgetName: string | null };
 
 export class MovementRepository {
   constructor(private readonly db: Database) {}
@@ -51,7 +54,7 @@ export class MovementRepository {
       month?: number;
       year?: number;
     },
-  ): Promise<{ items: Movement[]; total: number }> {
+  ): Promise<{ items: MovementWithBudget[]; total: number }> {
     const { page, limit, type, month, year } = options;
     const offset = (page - 1) * limit;
 
@@ -82,14 +85,36 @@ export class MovementRepository {
 
     const total = Number(countResult[0]?.total || 0);
 
-    // Fetch paginated items
-    const items = await this.db
-      .select()
+    // Fetch paginated items with budget name via JOIN
+    const rows = await this.db
+      .select({
+        id: movements.id,
+        userId: movements.userId,
+        periodId: movements.periodId,
+        type: movements.type,
+        amount: movements.amount,
+        description: movements.description,
+        date: movements.date,
+        paymentMethod: movements.paymentMethod,
+        isRecurring: movements.isRecurring,
+        tags: movements.tags,
+        createdAt: movements.createdAt,
+        updatedAt: movements.updatedAt,
+        deletedAt: movements.deletedAt,
+        budgetName: budgets.name,
+      })
       .from(movements)
+      .leftJoin(budgetPeriods, eq(movements.periodId, budgetPeriods.id))
+      .leftJoin(budgets, eq(budgetPeriods.budgetId, budgets.id))
       .where(whereClause)
       .orderBy(movements.date)
       .limit(limit)
       .offset(offset);
+
+    const items: MovementWithBudget[] = rows.map((row) => ({
+      ...row,
+      budgetName: row.budgetName ?? null,
+    }));
 
     return { items, total };
   }

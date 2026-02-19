@@ -16,7 +16,11 @@ import {
 
 export abstract class MovementService {
   /**
-   * Create a new movement
+   * Create a new movement.
+   *
+   * If `budgetId` is provided (and no `periodId`), automatically resolves
+   * the active period for the movement's date — so the frontend only needs
+   * to know the budget, not the specific period.
    */
   static async create(
     userId: string,
@@ -30,27 +34,38 @@ export abstract class MovementService {
       throw new ApiError(ErrorCode.USER_NOT_FOUND);
     }
 
-    // Verify period exists (if specified)
-    if (data.periodId) {
-      const period = await periodRepo.findById(data.periodId);
-      if (!period) {
-        throw new ApiError(ErrorCode.NOT_FOUND, {
-          message: "Period not found",
-        });
-      }
-      // Period ownership is validated through budget ownership
-      // (periods belong to budgets, budgets belong to users)
-    }
-
     // Validate amount
     const parsedAmount = Number(data.amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new ApiError(ErrorCode.INVALID_AMOUNT);
     }
 
+    // Resolve periodId: prefer explicit periodId, else auto-detect from budgetId + date
+    let resolvedPeriodId: string | null = data.periodId || null;
+
+    if (!resolvedPeriodId && data.budgetId) {
+      const movementDate = new Date(data.date);
+      const activePeriod = await periodRepo.findCurrentPeriod(
+        data.budgetId,
+        movementDate,
+      );
+      if (!activePeriod) {
+        throw new ApiError(ErrorCode.NOT_FOUND, {
+          message: "No active period found for this budget on the given date",
+        });
+      }
+      resolvedPeriodId = activePeriod.id;
+    } else if (resolvedPeriodId) {
+      // Validate explicit periodId exists
+      const period = await periodRepo.findById(resolvedPeriodId);
+      if (!period) {
+        throw new ApiError(ErrorCode.NOT_FOUND, { message: "Period not found" });
+      }
+    }
+
     const movement = await movementRepo.create({
       userId,
-      periodId: data.periodId || null,
+      periodId: resolvedPeriodId,
       type: data.type,
       amount: data.amount,
       description: data.description,
@@ -231,6 +246,7 @@ export abstract class MovementService {
       date: movement.date,
       paymentMethod: movement.paymentMethod,
       isRecurring: movement.isRecurring,
+      budgetName: movement.budgetName,
       tags: movement.tags,
       createdAt: movement.createdAt,
       updatedAt: movement.updatedAt,

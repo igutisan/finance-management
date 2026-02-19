@@ -102,24 +102,53 @@ export abstract class BudgetService {
   }
 
   /**
-   * Get all budgets for a user (paginated)
+   * Get all budgets for a user (paginated) — enriched with current period spending.
+   *
+   * Uses a single DB query with JOINs instead of N+1.
    */
   static async getUserBudgets(
     userId: string,
     options: BudgetModel.QueryParams,
     budgetRepo: BudgetRepository,
-  ): Promise<PaginatedResult<BudgetModel.BudgetResponse>> {
+  ): Promise<PaginatedResult<BudgetModel.BudgetCardResponse>> {
     const page = options.page || 1;
     const limit = options.limit || 20;
 
-    const { items, total } = await budgetRepo.findByUserIdPaginated(userId, {
-      page,
-      limit,
-      isActive: options.isActive,
+    const { items, total } = await budgetRepo.findByUserIdPaginatedWithSpending(
+      userId,
+      { page, limit, isActive: options.isActive },
+    );
+
+    const enriched: BudgetModel.BudgetCardResponse[] = items.map((item) => {
+      const periodAmount = item.currentPeriod
+        ? Number(item.currentPeriod.amount)
+        : Number(item.amount);
+      const remaining = periodAmount - item.totalSpent;
+      const percentageUsed =
+        periodAmount > 0
+          ? Math.round((item.totalSpent / periodAmount) * 100 * 10) / 10
+          : 0;
+
+      return {
+        id: item.id,
+        userId: item.userId,
+        name: item.name,
+        description: item.description,
+        amount: item.amount,
+        recurrence: item.recurrence,
+        currency: item.currency,
+        isActive: item.isActive,
+        currentPeriod: item.currentPeriod,
+        totalSpent: item.totalSpent,
+        remaining,
+        percentageUsed,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      };
     });
 
     return {
-      items: items.map(this.toBudgetResponse),
+      items: enriched,
       meta: buildPaginationMeta(total, page, limit),
     };
   }

@@ -4,7 +4,7 @@
  * Elysia routes for budget management with recurring budgets support.
  */
 
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { BudgetService } from "./service";
 import { BudgetRepository } from "./repository";
 import { BudgetPeriodRepository } from "./period-repository";
@@ -77,7 +77,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
       query: BudgetModel.queryParams,
       response: {
         200: paginatedSuccessSchema(
-          BudgetModel.budgetResponse,
+          BudgetModel.budgetCardResponse,
           "Budgets retrieved",
         ),
         401: errorSchema("Unauthorized"),
@@ -151,7 +151,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
     {
       auth: true,
       response: {
-        200: successSchema(BudgetModel.periodResponse, "Periods retrieved"),
+        200: successSchema(t.Array(BudgetModel.periodResponse), "Periods retrieved"),
         403: errorSchema("Budget does not belong to user"),
         404: errorSchema("Budget not found"),
       },
@@ -159,13 +159,13 @@ export const budget = new Elysia({ prefix: "/budgets" })
   )
 
   /**
-   * PATCH /budgets/:budgetId/periods/:periodId - Update a specific period
+   * PATCH /budgets/:id/periods/:periodId - Update a specific period
    */
   .patch(
-    "/:budgetId/periods/:periodId",
+    "/:id/periods/:periodId",
     async ({ params, body, userId }) => {
       const data = await BudgetService.updatePeriod(
-        params.budgetId,
+        params.id,
         params.periodId,
         userId,
         body,
@@ -205,7 +205,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
       auth: true,
       body: BudgetModel.extendPeriodsBody,
       response: {
-        200: successSchema(BudgetModel.periodResponse, "Periods extended"),
+        200: successSchema(t.Array(BudgetModel.periodResponse), "Periods extended"),
         400: errorSchema("Cannot extend NONE recurrence"),
         403: errorSchema("Budget does not belong to user"),
         404: errorSchema("Budget not found"),

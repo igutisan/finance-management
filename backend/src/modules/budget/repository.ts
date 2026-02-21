@@ -15,7 +15,6 @@ type BudgetWithSpendingRow = {
   user_id: string;
   name: string;
   description: string | null;
-  amount: string;
   recurrence: 'NONE' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
   currency: string;
   is_active: boolean;
@@ -37,7 +36,6 @@ export interface BudgetWithSpending {
   userId: string;
   name: string;
   description: string | null;
-  amount: string;
   recurrence: 'NONE' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY';
   currency: string;
   isActive: boolean;
@@ -169,7 +167,6 @@ export class BudgetRepository {
         b.user_id,
         b.name,
         b.description,
-        b.amount,
         b.recurrence,
         b.currency,
         b.is_active,
@@ -209,7 +206,6 @@ export class BudgetRepository {
       userId: row.user_id,
       name: row.name,
       description: row.description,
-      amount: row.amount,
       recurrence: row.recurrence,
       currency: row.currency,
       isActive: row.is_active,

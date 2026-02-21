@@ -17,7 +17,7 @@ import {
   ok,
   created,
   okPaginated,
-  successSchema,
+  successSchema, 
   paginatedSuccessSchema,
   errorSchema,
   validationErrorSchema,
@@ -227,6 +227,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
         userId,
         body,
         budgetRepo,
+        periodRepo,
       );
       return ok(data, "Budget updated");
     },

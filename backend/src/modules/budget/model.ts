@@ -48,8 +48,15 @@ export namespace BudgetModel {
   export const updateBody = t.Object({
     name: t.Optional(t.String()),
     description: t.Optional(t.String()),
-    amount: t.Optional(t.String({ pattern: "^\\d+(\\.\\d{1,2})?$", minLength: 1 })),
     isActive: t.Optional(t.Boolean()),
+    recurrence: t.Optional(
+      t.Union([
+        t.Literal("NONE"),
+        t.Literal("WEEKLY"),
+        t.Literal("BIWEEKLY"),
+        t.Literal("MONTHLY"),
+      ]),
+    ),
   });
 
   export type UpdateBody = typeof updateBody.static;
@@ -69,6 +76,7 @@ export namespace BudgetModel {
   export const updatePeriodBody = t.Object({
     amount: t.Optional(t.String({ pattern: "^\\d+(\\.\\d{1,2})?$", minLength: 1 })),
     isActive: t.Optional(t.Boolean()),
+    updateFuturePeriods: t.Optional(t.Boolean()), // Apply amount to this and future periods
   });
 
   export type UpdatePeriodBody = typeof updatePeriodBody.static;
@@ -80,7 +88,6 @@ export namespace BudgetModel {
     userId: t.String(),
     name: t.String(),
     description: t.Nullable(t.String()),
-    amount: t.String(),
     recurrence: t.Union([
       t.Literal("NONE"),
       t.Literal("WEEKLY"),
@@ -140,7 +147,6 @@ export namespace BudgetModel {
     userId: t.String(),
     name: t.String(),
     description: t.Nullable(t.String()),
-    amount: t.String(),
     recurrence: t.Union([
       t.Literal("NONE"),
       t.Literal("WEEKLY"),

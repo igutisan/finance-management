@@ -1,357 +1,84 @@
-# Testing Guide - TDD Best Practices
+# Testing Guide - Modern TDD Best Practices
 
 ## Overview
-This guide outlines testing strategies and Test-Driven Development (TDD) practices for the Budget API.
+This guide outlines the testing strategies and Test-Driven Development (TDD) practices for the Budget API.
 
-**Testing Philosophy:** Write tests first, implement later.
-
----
-
-## Test Structure
-
-### Test Types
-
-#### 1. Unit Tests (`tests/unit/`)
-**Purpose:** Test individual components in isolation.
-
-**Characteristics:**
-- Fast execution
-- No external dependencies
-- Mock all dependencies
-- High code coverage
-
-**What to test:**
-- Services (business logic)
-- Repositories (data access logic)
-- Utility functions
-- Transformations (Entity ↔ DTO)
-
-**Examples:**
-- `tests/unit/services/user.service.test.ts`
-- `tests/unit/repositories/user.repository.test.ts`
-
-#### 2. Integration Tests (`tests/integration/`)
-**Purpose:** Test multiple layers working together.
-
-**Characteristics:**
-- Test layer interactions
-- Use test database
-- Verify data persistence
-- Test transactions
-
-**What to test:**
-- Service + Repository integration
-- Unit of Work transactions
-- Database constraints
-- Cascade operations
-
-**Example:**
-- `tests/integration/user.integration.test.ts`
-
-#### 3. E2E Tests (`tests/e2e/`)
-**Purpose:** Test complete user flows via HTTP.
-
-**Characteristics:**
-- Full application stack
-- Real HTTP requests
-- Test database
-- Verify complete workflows
-
-**What to test:**
-- API endpoints
-- Authentication flows
-- Error responses
-- Complete user stories
-
-**Example:**
-- `tests/e2e/user.e2e.test.ts`
+**Testing Philosophy:** Write tests designed to protect business outcomes, not to execute libraries.
 
 ---
 
-## TDD Workflow
+## Strategy & Paradigms
 
-### Red-Green-Refactor Cycle
+### What NOT to test: Repositories
+We explicitly **do not write Unit Tests for repositories**. 
+- Mocking the ORM (Drizzle) to assert that a repository function calls `db.insert(...)` correctly is an **anti-pattern**.
+- Repository tests simply mirror Drizzle documentation and add fragile boilerplate.
+- Data logic is best verified during Integration testing natively against Postgres.
 
-**1. Red - Write failing test:**
-```typescript
-test('UserService.register should create a new user', async () => {
-  const dto = { email: 'test@example.com', password: 'password123', ... };
-  const result = await userService.register(dto);
-  expect(result.email).toBe('test@example.com');
-});
-// Test fails because method not implemented
-```
+### End-to-End & Integration First (`tests/integration/`)
+**Purpose:** Verify the actual backend contracts and the database layers.
 
-**2. Green - Write minimum code to pass:**
-```typescript
-async register(dto: CreateUserRequestDTO): Promise<UserResponseDTO> {
-  // Minimal implementation to pass test
-  return { id: '1', email: dto.email, ... };
-}
-```
+**Characteristics:**
+- Tests spin up real HTTP requests (via `app.handle()`).
+- The test database connects actively to Postgres.
+- Verifies cascades, constraints, soft-deletes, and JSON API payloads.
 
-**3. Refactor - Improve code quality:**
-```typescript
-async register(dto: CreateUserRequestDTO): Promise<UserResponseDTO> {
-  // Add validation
-  // Add password hashing
-  // Implement proper repository call
-  // Return proper DTO
-}
-```
+**Example scenarios tested:**
+- Registering with an existing email throws a `409` envelope.
+- Failing a validation block returns `422`.
+- Hashing collisions or token revokes function correctly natively.
 
-### TDD Benefits
-- **Better design:** Tests force modular code
-- **Confidence:** Changes don't break existing features
-- **Documentation:** Tests serve as examples
-- **Faster debugging:** Failing tests pinpoint issues
+### Core Business Logic (`tests/unit/services/`)
+**Purpose:** Ensure complex domain rules behave natively and strictly without depending on the API runtime or the database.
+
+**Characteristics:**
+- The dependencies (Repositories, JWT context) are abstracted.
+- Services compute business mathematics quickly and statelessly.
+
+**Example scenarios testing:**
+- Verifying a `MovementService` denies negative values or returns the correct `balance`.
+- Verifying the `BudgetService` generates precisely 12 `BudgetPeriods` when recurrence is `"MONTHLY"`.
 
 ---
 
-## Running Tests
+## Test Execution
 
 ### Bun Test Commands
+Fast execution using the native Bun runtime. Parallelisation is supported.
+
 ```bash
 # Run all tests
 bun test
 
-# Run specific test file
-bun test tests/unit/services/user.service.test.ts
+# Run a specific domain suite
+bun test src/tests/unit/services/budget.service.test.ts
 
-# Run with watch mode
-bun test --watch
-
-# Run with coverage
-bun test --coverage
+# Run tests filtering by description
+bun test --testNamePattern="should return valid JWT"
 ```
 
-### Test Database Setup
-```bash
-# Create test database
-docker exec -it budget-db psql -U postgres -c "CREATE DATABASE budget_test;"
-
-# Run migrations for test DB
-# TODO: Add migration script
-
-# Set test environment
-export DATABASE_NAME=budget_test
-```
+### Environment Settings
+Integration tests require a live database. Tests connect using the `DATABASE_URL` or standard postgres environment variables detailed in the `.env` root. Ensure `bun` is run under an active docker context or local postgres engine.
 
 ---
 
-## Writing Tests
-
-### Unit Test Example
-```typescript
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import { UserService } from '../../src/services/user.service';
-
-describe('UserService', () => {
-  let userService: UserService;
-  let mockUnitOfWork: any;
-
-  beforeEach(() => {
-    // Mock dependencies
-    mockUnitOfWork = {
-      users: {
-        findByEmail: mock(() => Promise.resolve(null)),
-        create: mock((data) => Promise.resolve({ id: '1', ...data })),
-      },
-      executeInTransaction: mock((fn) => fn(mockUnitOfWork)),
-    };
-
-    userService = new UserService(mockUnitOfWork);
-  });
-
-  test('register should create a new user', async () => {
-    const dto = {
-      email: 'test@example.com',
-      password: 'password123',
-      firstName: 'John',
-      lastName: 'Doe',
-    };
-
-    const result = await userService.register(dto);
-
-    expect(result.email).toBe(dto.email);
-    expect(mockUnitOfWork.users.create).toHaveBeenCalled();
-  });
-
-  test('register should fail if email exists', async () => {
-    mockUnitOfWork.users.findByEmail = mock(() => 
-      Promise.resolve({ id: '1', email: 'test@example.com' })
-    );
-
-    const dto = { email: 'test@example.com', password: '123', ... };
-
-    await expect(userService.register(dto)).rejects.toThrow('Email already exists');
-  });
-});
-```
-
-### Integration Test Example
-```typescript
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { UnitOfWork } from '../../src/repositories/unit-of-work';
-import { databaseConfig } from '../../src/config/database.config';
-
-describe('User Integration Tests', () => {
-  let uow: UnitOfWork;
-
-  beforeAll(async () => {
-    // Setup test database
-    await databaseConfig.query('TRUNCATE TABLE users CASCADE');
-  });
-
-  afterAll(async () => {
-    // Cleanup
-    await databaseConfig.close();
-  });
-
-  test('should create and retrieve user', async () => {
-    uow = new UnitOfWork();
-    
-    const userData = {
-      email: 'integration@test.com',
-      passwordHash: 'hashed',
-      firstName: 'Test',
-      lastName: 'User',
-    };
-
-    const created = await uow.users.create(userData);
-    const retrieved = await uow.users.findById(created.id);
-
-    expect(retrieved).not.toBeNull();
-    expect(retrieved?.email).toBe(userData.email);
-  });
-});
-```
-
-### E2E Test Example  
-```typescript
-import { describe, test, expect } from 'bun:test';
-
-describe('User E2E Tests', () => {
-  const baseUrl = 'http://localhost:3000';
-
-  test('POST /users/register should create user', async () => {
-    const response = await fetch(`${baseUrl}/users/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'e2e@test.com',
-        password: 'password123',
-        firstName: 'E2E',
-        lastName: 'Test',
-      }),
-    });
-
-    expect(response.status).toBe(201);
-    const data = await response.json();
-    expect(data.email).toBe('e2e@test.com');
-  });
-});
-```
+## Security In Parallel Test Execution
+Integration tests are structurally isolated or uniquely scoped to prevent **flakiness**.
+- Users logging in rapidly over identical milliseconds in a test loop will generate identical JWT strings.
+- We implement `jti` (UUID) injection to JWTs so that rapid loop authentication tests natively pass hashing tests without unique-constraint closures on the database end.
 
 ---
 
-## Mocking Strategies
+## The TDD Flow
 
-### Mock Repositories
-```typescript
-const mockUserRepo = {
-  findById: mock(() => Promise.resolve(mockUser)),
-  create: mock(() => Promise.resolve(mockUser)),
-  update: mock(() => Promise.resolve(mockUser)),
-};
-```
+We execute code modifications using standard **Red-Green-Refactor**.
 
-### Mock Unit of Work
-```typescript
-const mockUnitOfWork = {
-  users: mockUserRepo,
-  budgets: mockBudgetRepo,
-  movements: mockMovementRepo,
-  executeInTransaction: mock((fn) => fn(mockUnitOfWork)),
-};
-```
-
-### Mock Database
-For integration tests, use a test database, not mocks.
+1. **RED:** Write the assertion verifying the new feature or isolating fixing a bug.
+   - Example: Expect an HTTP 500 when accessing `/budgets/:id` if it's unauthorized.
+2. **GREEN:** Alter the service, payload model, or controller macro (e.g., `auth: true`) until the response strictly conforms.
+3. **REFACTOR:** Enhance variables, dry code, or extract shared structures without the test suite changing from Green to Red.
+   - Example: Replace deep nesting logic with simpler database-level SQL extracts.
 
 ---
 
-## Coverage Goals
-
-**Target Coverage:**
-- **Overall:** 80%+ code coverage
-- **Services:** 90%+ (business logic is critical)
-- **Repositories:** 70%+ (integration tests cover more)
-- **Controllers:** 80%+ (E2E tests help)
-
-**Run coverage:**
-```bash
-bun test --coverage
-```
-
----
-
-## Best Practices
-
-### DO:
-✅ Write tests before implementation (TDD)  
-✅ Test one thing per test  
-✅ Use descriptive test names  
-✅ Mock external dependencies  
-✅ Test edge cases and errors  
-✅ Keep tests independent  
-✅ Use beforeEach for setup  
-✅ Clean up after tests  
-
-### DON'T:
-❌ Test implementation details  
-❌ Write tests that depend on each other  
-❌ Skip error case testing  
-❌ Use production database for tests  
-❌ Write tests after implementation  
-❌ Mock everything (integration tests need real components)  
-
----
-
-## Test Organization
-
-```
-tests/
-├── unit/
-│   ├── services/
-│   │   ├── user.service.test.ts
-│   │   ├── budget.service.test.ts
-│   │   └── movement.service.test.ts
-│   └── repositories/
-│       ├── user.repository.test.ts
-│       ├── budget.repository.test.ts
-│       └── movement.repository.test.ts
-├── integration/
-│   ├── user.integration.test.ts
-│   ├── budget.integration.test.ts
-│   └── movement.integration.test.ts
-└── e2e/
-    ├── user.e2e.test.ts
-    ├── budget.e2e.test.ts
-    └── movement.e2e.test.ts
-```
-
----
-
-## Continuous Integration
-
-**TODO:** Set up CI/CD pipeline
-- Run tests on every commit
-- Block merges if tests fail
-- Generate coverage reports
-- Test against multiple Node/Bun versions
-
----
-
-**Document Version:** 1.0  
-**Last Updated:** 2026-02-06
+**Last Updated:** 2026-02-21

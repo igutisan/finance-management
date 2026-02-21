@@ -51,7 +51,6 @@ export abstract class BudgetService {
       userId,
       name: data.name,
       description: data.description,
-      amount: data.amount,
       recurrence: data.recurrence,
       currency: data.currency || "USD",
     });
@@ -104,7 +103,6 @@ export abstract class BudgetService {
   /**
    * Get all budgets for a user (paginated) — enriched with current period spending.
    *
-   * Uses a single DB query with JOINs instead of N+1.
    */
   static async getUserBudgets(
     userId: string,
@@ -122,7 +120,7 @@ export abstract class BudgetService {
     const enriched: BudgetModel.BudgetCardResponse[] = items.map((item) => {
       const periodAmount = item.currentPeriod
         ? Number(item.currentPeriod.amount)
-        : Number(item.amount);
+        : 0;
       const remaining = periodAmount - item.totalSpent;
       const percentageUsed =
         periodAmount > 0
@@ -134,7 +132,6 @@ export abstract class BudgetService {
         userId: item.userId,
         name: item.name,
         description: item.description,
-        amount: item.amount,
         recurrence: item.recurrence,
         currency: item.currency,
         isActive: item.isActive,
@@ -161,6 +158,7 @@ export abstract class BudgetService {
     userId: string,
     data: BudgetModel.UpdateBody,
     budgetRepo: BudgetRepository,
+    periodRepo: BudgetPeriodRepository,
   ): Promise<BudgetModel.BudgetResponse> {
     const existingBudget = await budgetRepo.findById(budgetId);
     if (!existingBudget) {
@@ -172,18 +170,11 @@ export abstract class BudgetService {
       });
     }
 
-    // Validate amount if provided
-    if (data.amount !== undefined) {
-      const parsedAmount = Number(data.amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        throw new ApiError(ErrorCode.INVALID_AMOUNT);
-      }
-    }
-
     const budget = await budgetRepo.update(budgetId, data);
     if (!budget) {
       throw new ApiError(ErrorCode.BUDGET_NOT_FOUND);
     }
+
     return this.toBudgetResponse(budget);
   }
 
@@ -231,12 +222,12 @@ export abstract class BudgetService {
     const currentPeriod = await periodRepo.findCurrentPeriod(budgetId, new Date());
 
     if (!currentPeriod) {
-      // No active period for current date
+      // No active period for current date, hence no budget limit active
       return {
         budget: this.toBudgetResponse(budget),
         currentPeriod: null,
         totalSpent: 0,
-        remaining: Number(budget.amount),
+        remaining: 0,
         percentageUsed: 0,
       };
     }
@@ -302,10 +293,34 @@ export abstract class BudgetService {
       throw new ApiError(ErrorCode.NOT_FOUND, { message: "Period not found" });
     }
 
-    const updated = await periodRepo.update(periodId, data);
+    // Prevent updating past periods
+    const today = new Date().toISOString().split('T')[0];
+    if (period.endDate < today) {
+      throw new ApiError(ErrorCode.BAD_REQUEST, {
+        message: "Cannot update periods that have already ended",
+      });
+    }
+
+    // Validate amount if provided
+    if (data.amount !== undefined) {
+      const parsedAmount = Number(data.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        throw new ApiError(ErrorCode.INVALID_AMOUNT);
+      }
+    }
+
+    const { updateFuturePeriods, ...updateData } = data;
+
+    const updated = await periodRepo.update(periodId, updateData);
     if (!updated) {
       throw new ApiError(ErrorCode.NOT_FOUND);
     }
+
+    // If requested, cascade the amount change to all periods starting from this one.
+    if (data.amount !== undefined && updateFuturePeriods) {
+      await periodRepo.updateFuturePeriodsAmountFromDate(budgetId, data.amount, period.startDate);
+    }
+
     return this.toPeriodResponse(updated);
   }
 
@@ -345,7 +360,7 @@ export abstract class BudgetService {
       nextStart.toISOString().split("T")[0],
       null,
       budget.recurrence as RecurrenceType,
-      budget.amount,
+      lastPeriod.amount, // Use the amount of the last period as template
       data.periodsToGenerate,
     );
 
@@ -370,7 +385,6 @@ export abstract class BudgetService {
       userId: budget.userId,
       name: budget.name,
       description: budget.description,
-      amount: budget.amount,
       recurrence: budget.recurrence,
       currency: budget.currency,
       isActive: budget.isActive,

@@ -4,9 +4,9 @@
 This document describes the architecture of the Budget API, a layered backend application built with Elysia runtime (Bun), TypeScript, and PostgreSQL.
 
 **Architecture Pattern:** Layered Architecture  
-**Design Patterns:** Repository, Unit of Work, Singleton  
-**Framework:** Elysia (Bun runtime)  
-**Database:** PostgreSQL  
+**Design Patterns:** Repository, Dependency Injection (via function parameters), Singleton  
+**Framework:** Elysia (Bun runtime) + Elysia TypeBox/t for validation  
+**Database/ORM:** PostgreSQL + Drizzle ORM  
 **Language:** TypeScript (Strict mode)
 
 ---
@@ -16,33 +16,25 @@ This document describes the architecture of the Budget API, a layered backend ap
 ### Layer Overview
 The application follows a strict layered architecture with clear separation of concerns:
 
-```
+```text
 ┌─────────────────────────────────────────┐
-│         HTTP Layer (Elysia)             │  ← Entry Point
+│         HTTP Layer (Elysia plugins)     │  ← Entry Point (index.ts)
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
-│     Controllers (Route Handlers)        │  ← HTTP Concerns
+│    Controllers (Route Handlers)         │  ← HTTP Concerns, Schemas, & Plugins
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
-│    Services (Business Logic)            │  ← Business Rules
+│    Services (Business Logic)            │  ← Core Business Rules & Validations
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
-│  Unit of Work (Transaction Manager)     │  ← Transaction Boundary
+│   Repositories (Data Access)            │  ← Database Operations (Drizzle ORM)
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
-│   Repositories (Data Access)            │  ← Data Layer
-└─────────────────────────────────────────┘
-                  ↓
-┌─────────────────────────────────────────┐
-│    Entities (Domain Models)             │  ← Domain Layer
-└─────────────────────────────────────────┘
-                  ↓
-┌─────────────────────────────────────────┐
-│      Config + Database Pool             │  ← Infrastructure
+│        Drizzle Schema Models            │  ← Domain Layer / Database Layout
 └─────────────────────────────────────────┘
                   ↓
 ┌─────────────────────────────────────────┐
@@ -50,313 +42,90 @@ The application follows a strict layered architecture with clear separation of c
 └─────────────────────────────────────────┘
 ```
 
-### Data Flow
-**Request Flow:**
-```
-HTTP Request → Controller → Service → Unit of Work → Repository → Database
-```
-
-**Response Flow:**
-```
-Database → Repository → Entity → Service → DTO → Controller → HTTP Response
-```
-
 ---
 
 ## Layer Descriptions
 
-### 1. Entities Layer (`src/entities/`)
-**Pure domain models** matching database schema.
+### 1. Schema Layer (`src/shared/db/schema.ts`)
+**Database schemas define the true data shape**.
+Instead of abstract Class-based Entities, the source of truth is the Drizzle ORM schema mapping.
+- `users`: Core account data
+- `refresh_tokens`: Hashes for JWT security
+- `budgets`: Recurring templates (MONTHLY, WEEKLY, NONE)
+- `budget_periods`: Time-bound chunks of a budget
+- `movements`: Individual financial transactions linked to periods.
+
+### 2. DTOs / Models (`src/modules/*/model.ts`)
+**Data Exchange structures representing the API interfaces.**
+Created using `Elysia t` (TypeBox) to automatically generate swagger docs and intercept/validate bad JSON payloads at the routing level.
+
+### 3. Repositories Layer (`src/modules/*/repository.ts`)
+**Data access layer completely obscuring Drizzle from the business logic.**
 
 **Responsibilities:**
-- Define data structure
-- Type safety for domain objects
-- No business logic
-- Map to database tables
+- Wrap database interactions behind clean async methods.
+- Provide simple semantic queries e.g. `findByEmailIncludeDeleted()`
+- Accept `typeof db` injected from the controller to perform operations.
 
-**Key Files:**
-- `base/base.entity.ts`: Common properties (id, timestamps, deletedAt)
-- `user.entity.ts`: User domain model
-- `budget.entity.ts`: Budget domain model
-- `movement.entity.ts`: Movement domain model with MovementType enum
-
-**Design Principle:** Single source of truth for domain structure.
-
-### 2. DTOs Layer (`src/dtos/`)
-**Data Transfer Objects** for API contracts.
+### 4. Services Layer (`src/modules/*/service.ts`)
+**Pure stateless business logic orchestrators.**
 
 **Responsibilities:**
-- Define request/response structures
-- Separate internal models from API contracts
-- Validate input data
-- Exclude sensitive information
+- Validate complex temporal constraints (e.g. cross-referencing movement times with budget period boundaries).
+- Dispatch emails or trigger side effects.
+- Hash passwords (Argon2) or sign JWTs via `JwtContext`.
+- Compute financial summaries dynamically.
 
-**Naming Convention:**
-- Request DTOs: `*.request.dto.ts`
-- Response DTOs: `*.response.dto.ts`
+*Note:* Services are static classes. They do not maintain instance state. They receive all dependencies (Repositories, JWT context) as arguments from the Controller.
 
-**Design Principle:** Never expose entities directly; always use DTOs.
-
-### 3. Repositories Layer (`src/repositories/`)
-**Data access** using Repository and Unit of Work patterns.
+### 5. Controllers Layer (`src/modules/*/index.ts`)
+**Elysia Route Handlers.**
 
 **Responsibilities:**
-- Abstract database operations
-- CRUD operations per entity
-- Custom query methods
-- Transaction participation
-
-**Pattern: Repository**
-- Interface: `IBaseRepository<T>`
-- Implementations: `UserRepository`, `BudgetRepository`, `MovementRepository`
-
-**Pattern: Unit of Work**
-- Interface: `IUnitOfWork`
-- Implementation: `UnitOfWork`
-- Coordinates repositories in transactions
-
-**Design Principle:** Encapsulate all data access logic.
-
-### 4. Services Layer (`src/services/`)
-**Business logic** orchestration.
-
-**Responsibilities:**
-- Implement business rules
-- Coordinate repository operations
-- Manage transactions via Unit of Work
-- Transform entities ↔ DTOs
-- Validation and error handling
-
-**Key Services:**
-- `UserService`: Authentication, user management
-- `BudgetService`: Budget CRUD, validation, summaries
-- `MovementService`: Movement CRUD, analytics
-
-**Design Principle:** Services contain business logic, not data access.
-
-### 5. Controllers Layer (`src/controllers/`)
-**HTTP request handling** with Elysia.
-
-**Responsibilities:**
-- Define API routes
-- Validate requests (Elysia schemas)
-- Call service methods
-- Format responses
-- HTTP status codes
-
-**Key Controllers:**
-- `userController`: `/users/*` endpoints
-- `budgetController`: `/budgets/*` endpoints
-- `movementController`: `/movements/*` endpoints
-
-**Design Principle:** Thin controllers; delegate to services.
-
-### 6. Config Layer (`src/config/`)
-**Configuration management** using Singleton pattern.
-
-**Responsibilities:**
-- Load environment variables
-- Database connection pool
-- Centralized configuration access
-
-**Pattern: Singleton**
-- `envConfig`: Environment variables (single instance)
-- `databaseConfig`: DB pool (single instance)
-
-**Design Principle:** Single instance for resources, lazy initialization.
+- Mount paths (`/users`, `/budgets`).
+- Validate incoming schemas (Body, Path, Query).
+- Apply macros (e.g. `auth: true` to require JWT validation).
+- Send specific success or error envelopes (`{ success: true, data: ... }`).
 
 ---
 
-## Design Patterns
+## Technical Flow & Domain Logic
 
-### Repository Pattern
-**Purpose:** Abstract data access from business logic.
+### The Budget & Movement Relationship
+Unlike standard systems where a Movement links directly to a Budget causing historical data loss when budgets change, this architecture uses **BudgetPeriods**:
 
-**Benefits:**
-- Centralized data access logic
-- Easy to mock for testing
-- Database-agnostic interface
-- Query reusability
+1. A `Budget` has a `recurrence` (e.g. MONTHLY) and acts as an infinite template.
+2. The system auto-generates `BudgetPeriods` covering physical date ranges (e.g. Feb 01 to Feb 28).
+3. `Movements` attach to a specific `BudgetPeriod`. 
+This allows previous months to freeze completely, preventing historical anomalies when the user raises their budget allowance next year.
 
-**Implementation:**
-```typescript
-interface IBaseRepository<T> {
-  findById(id: string): Promise<T | null>;
-  create(data: ...): Promise<T>;
-  // ... other CRUD methods
-}
-```
-
-### Unit of Work Pattern
-**Purpose:** Manage transactions across multiple repositories.
-
-**Benefits:**
-- Atomic operations
-- Transactional consistency
-- Coordinated commits/rollbacks
-- Single transaction context
-
-**Implementation:**
-```typescript
-await uow.executeInTransaction(async (uow) => {
-  await uow.users.create(...);
-  await uow.budgets.create(...);
-  // Commits together or rolls back together
-});
-```
-
-### Singleton Pattern
-**Purpose:** Ensure single instance of configuration and resources.
-
-**Benefits:**
-- Single database pool
-- Consistent configuration
-- Resource efficiency
-
-**Implementation:**
-```typescript
-class Config {
-  private static instance: Config;
-  static getInstance() { ... }
-}
-```
+### JWT Rotation & Authentication
+Authentication relies on the `authPlugin` macro via Elysia. 
+Refreshed access tokens rotate upon use, invalidating previous refresh tokens. Token Hashes are strictly checked for collision via a `jti` (unique JWT id) and verified against `refresh_tokens` tables.
 
 ---
 
 ## Folder Structure
-```
+```text
 src/
-├── config/                  # Configuration (Singleton)
-│   ├── README.md
-│   ├── database.config.ts   # DB pool
-│   └── env.config.ts        # Environment vars
-├── entities/                # Domain Models
-│   ├── README.md
-│   ├── base/
-│   │   └── base.entity.ts
-│   ├── user.entity.ts
-│   ├── budget.entity.ts
-│   └── movement.entity.ts
-├── dtos/                    # Data Transfer Objects
-│   ├── README.md
-│   ├── user/
-│   │   ├── *.request.dto.ts
-│   │   └── *.response.dto.ts
-│   ├── budget/
-│   └── movement/
-├── repositories/            # Data Access (Repository + UoW)
-│   ├── README.md
-│   ├── interfaces/
-│   │   ├── base-repository.interface.ts
-│   │   └── unit-of-work.interface.ts
-│   ├── unit-of-work.ts
-│   ├── user.repository.ts
-│   ├── budget.repository.ts
-│   └── movement.repository.ts
-├── services/                # Business Logic
-│   ├── README.md
-│   ├── user.service.ts
-│   ├── budget.service.ts
-│   └── movement.service.ts
-├── controllers/             # HTTP Handlers
-│   ├── README.md
-│   ├── user.controller.ts
-│   ├── budget.controller.ts
-│   └── movement.controller.ts
-├── docs/                    # Documentation
-│   ├── ARCHITECTURE.md      # This file
-│   ├── TESTING_GUIDE.md
-│   └── diagrams/
-│       ├── architecture-flow.mmd
-│       ├── layer-interaction.mmd
-│       └── unit-of-work.mmd
-├── tests/                   # Test Suite
-│   ├── unit/
-│   ├── integration/
-│   └── e2e/
-└── index.ts                 # Application Entry
+├── docs/                    # Architecture and Testing docs
+├── modules/                 # Modular, feature-driven grouping
+│   ├── budget/              # Budgets & Periods sub-module
+│   ├── movement/            # Transactions sub-module
+│   ├── token/               # JWT security sub-module
+│   └── user/                # Auth & Identity sub-module
+├── shared/
+│   ├── config/              # Environment (Zod) validation
+│   ├── db/                  # Drizzle ORM schemas & postgres pool
+│   ├── plugins/             # Elysia extensions (Auth macro, Error Handlers)
+│   ├── responses/           # Unified API response formats
+│   └── utils/
+├── tests/                   # TDD Suite
+│   ├── integration/         # DB-connected API tests
+│   └── unit/                # Mocked Service rules
+└── index.ts                 # Elysia startup
 ```
 
 ---
 
-## Technology Stack
-
-### Runtime & Framework
-- **Bun**: Fast JavaScript runtime
-- **Elysia**: Web framework optimized for Bun
-- **TypeScript**: Strict mode for type safety
-
-### Database
-- **PostgreSQL 16**: Relational database
-- **pg** (or bun-postgres): Database client
-
-### Development
-- **Bun test**: Testing framework
-- **Docker**: Containerization
-- **Docker Compose**: Multi-service orchestration
-
----
-
-## Key Design Decisions
-
-### Why Layered Architecture?
-- Clear separation of concerns
-- Easy to test each layer
-- Scalable and maintainable
-- Industry-standard pattern
-
-### Why Unit of Work?
-- Ensures transactional integrity
-- Simplifies complex operations
-- Reduces boilerplate
-- Single transaction context
-
-### Why DTOs?
-- API versioning flexibility
-- Security (hide sensitive data)
-- Validation at API boundary
-- Decouples API from domain
-
-### Why Singleton for Config?
-- Single database pool
-- Efficient resource usage
-- Consistent configuration
-- Prevents multiple connections
-
----
-
-## Diagrams
-
-See `docs/diagrams/` for visual representations:
-- **architecture-flow.mmd**: Complete request/response flow
-- **layer-interaction.mmd**: Layer dependencies
-- **unit-of-work.mmd**: Transaction management visualization
-
----
-
-## Next Steps
-
-### Implementation
-1. Implement database client integration (pg or bun-postgres)
-2. Complete repository implementations
-3. Add authentication middleware
-4. Implement password hashing (bcrypt)
-5. Add JWT token generation/validation
-
-### Testing
-1. Write unit tests for services
-2. Add integration tests for repositories
-3. Create E2E tests for API endpoints
-4. Set up test database
-
-### Deployment
-1. Containerize with Docker
-2. Set up Docker Compose
-3. Configure environment variables
-4. Add health checks
-5. Implement logging
-
----
-
-**Document Version:** 1.0  
-**Last Updated:** 2026-02-06
+**Last Updated:** 2026-02-21

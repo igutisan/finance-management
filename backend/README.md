@@ -1,15 +1,9 @@
-# Elysia with Bun runtime
+# Budget Backend (Elysia)
 
-## Getting Started
-To get started with this template, simply paste this command into your terminal:
-```bash
-bun create elysia ./elysia-example
-```
+Please see the [root README](../../README.md) for full setup instructions, endpoints, and architecture details.
 
-## Development
-To start the development server run:
+To start the development server locally:
 ```bash
 bun run dev
 ```
-
-Open http://localhost:3000/ with your browser to see the result.
+Open http://localhost:3000/swagger to view the interactive API documentation.

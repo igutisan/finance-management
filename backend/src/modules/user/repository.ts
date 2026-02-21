@@ -32,6 +32,17 @@ export class UserRepository {
     return result[0] || null;
   }
 
+  /** Find a user by email regardless of soft-delete status */
+  async findByEmailIncludeDeleted(email: string): Promise<User | null> {
+    const result = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    return result[0] || null;
+  }
+
   async findAll(): Promise<User[]> {
     return await this.db
       .select()
@@ -73,6 +84,17 @@ export class UserRepository {
       .returning();
     
     return result.length > 0;
+  }
+
+  /** Restore a soft-deleted user (updates regardless of deletedAt) */
+  async restore(id: string, data: Partial<NewUser>): Promise<User | null> {
+    const result = await this.db
+      .update(users)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+
+    return result[0] || null;
   }
 
   async hardDelete(id: string): Promise<boolean> {

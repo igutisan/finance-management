@@ -28,22 +28,34 @@ export abstract class UserService {
     data: UserModel.RegisterBody,
     userRepo: UserRepository,
   ): Promise<UserModel.UserResponse> {
-    console.log("prueba antes de vladiar");
     const emailExist = await userRepo.emailExists(data.email);
-    console.log("test", emailExist);
     if (emailExist) {
       throw new ApiError(ErrorCode.EMAIL_ALREADY_EXISTS);
     }
 
     const hashedPassword = await PasswordUtil.hash(data.password);
+
+    // Check if there's a soft-deleted user with this email — restore instead of insert
+    // to avoid unique constraint violations.
+    const deletedUser = await userRepo.findByEmailIncludeDeleted(data.email);
+    if (deletedUser && deletedUser.deletedAt !== null) {
+      const restored = await userRepo.restore(deletedUser.id, {
+        passwordHash: hashedPassword,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        deletedAt: null,
+        isActive: true,
+        emailVerified: false,
+      });
+      return this.toUserResponse(restored!);
+    }
+
     const user = await userRepo.create({
       email: data.email,
       passwordHash: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
     });
-
-    console.log("test2", user);
 
     return this.toUserResponse(user);
   }

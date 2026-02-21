@@ -5,99 +5,164 @@
  */
 
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import { UserService } from '../../../services/user.service';
-import type { UnitOfWork } from '../../../repositories/unit-of-work';
+import { UserService } from "../../../modules/user/service";
+import type { UserRepository } from "../../../modules/user/repository";
+import type { RefreshTokenRepository } from "../../../modules/token/repository";
 
-describe('UserService', () => {
-  let userService: UserService;
-  let mockUnitOfWork: any;
+describe("UserService", () => {
+  let mockUserRepo: any;
+  let mockTokenRepo: any;
+  let mockJwt: any;
 
   beforeEach(() => {
-    // Mock Unit of Work with mocked repositories
-    mockUnitOfWork = {
-      users: {
-        findByEmail: mock(() => Promise.resolve(null)),
-        create: mock((data) => Promise.resolve({
-          id: '123',
-          ...data,
+    mockUserRepo = {
+      emailExists: mock(() => Promise.resolve(false)),
+      create: mock((data: any) =>
+        Promise.resolve({
+          id: "user-1",
+          email: data.email,
+          passwordHash: data.passwordHash,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          isActive: true,
+          emailVerified: false,
           createdAt: new Date(),
           updatedAt: new Date(),
+        })
+      ),
+      findByEmail: mock(() =>
+        Promise.resolve(null)
+      ),
+      findById: mock(() =>
+        Promise.resolve(null)
+      ),
+      update: mock((id: string, data: any) =>
+        Promise.resolve({
+          id,
+          email: "test@example.com",
+          passwordHash: data.passwordHash || "hashed_password",
+          firstName: data.firstName || "John",
+          lastName: data.lastName || "Doe",
+          isActive: true,
+          emailVerified: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      ),
+      softDelete: mock(() => Promise.resolve(true)),
+      findByEmailIncludeDeleted: mock(() => Promise.resolve(null)),
+      restore: mock((id: string, data: any) =>
+        Promise.resolve({
+          id,
+          email: "test@example.com",
+          passwordHash: data.passwordHash || "hashed_password",
+          firstName: data.firstName || "John",
+          lastName: data.lastName || "Doe",
+          isActive: true,
+          emailVerified: false,
           deletedAt: null,
-        })),
-        findById: mock(() => Promise.resolve(null)),
-      },
-      executeInTransaction: mock((fn) => fn(mockUnitOfWork)),
-    } as unknown as UnitOfWork;
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      ),
+    } as unknown as UserRepository;
 
-    userService = new UserService(mockUnitOfWork);
+    mockTokenRepo = {
+      create: mock(() => Promise.resolve({ id: "token-1" })),
+    } as unknown as RefreshTokenRepository;
+
+    mockJwt = {
+      sign: mock(() => Promise.resolve("mock.jwt.token")),
+    };
   });
 
-  describe('register', () => {
-    test('should create a new user successfully', async () => {
+  describe("register", () => {
+    test("should create a new user successfully", async () => {
       const dto = {
-        email: 'test@example.com',
-        password: 'password123',
-        firstName: 'John',
-        lastName: 'Doe',
+        email: "test@example.com",
+        password: "password123",
+        firstName: "John",
+        lastName: "Doe",
       };
 
-      // TODO: Implement
-      // const result = await userService.register(dto);
-      // expect(result.email).toBe(dto.email);
-      // expect(mockUnitOfWork.users.create).toHaveBeenCalled();
-      
-      expect(true).toBe(true); // Placeholder
+      const result = await UserService.register(dto, mockUserRepo);
+      expect(result.email).toBe(dto.email);
+      expect(mockUserRepo.create).toHaveBeenCalledTimes(1);
     });
 
-    test('should throw error if email already exists', async () => {
-      mockUnitOfWork.users.findByEmail = mock(() =>
-        Promise.resolve({ id: '1', email: 'existing@example.com' })
+    test("should throw error if email already exists", async () => {
+      mockUserRepo.emailExists = mock(() => Promise.resolve(true));
+
+      const dto = {
+        email: "existing@example.com",
+        password: "password123",
+        firstName: "John",
+        lastName: "Doe",
+      };
+
+      expect(UserService.register(dto, mockUserRepo)).rejects.toThrow();
+    });
+
+    test("should hash password before storing", async () => {
+      const dto = {
+        email: "test@example.com",
+        password: "plaintext",
+        firstName: "John",
+        lastName: "Doe",
+      };
+
+      await UserService.register(dto, mockUserRepo);
+      const createCall = (mockUserRepo.create as any).mock.calls[0][0];
+      expect(createCall.passwordHash).not.toBe("plaintext");
+    });
+  });
+
+  describe("login", () => {
+    test("should return user on valid credentials", async () => {
+      mockUserRepo.findByEmail = mock(() =>
+        Promise.resolve({
+          id: "user-1",
+          email: "test@example.com",
+          passwordHash: "$argon2id$v=19$m=4096,t=3,p=1$SALT$HASH", // Mock hash
+          firstName: "John",
+          lastName: "Doe",
+          isActive: true,
+          emailVerified: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
       );
-
-      const dto = {
-        email: 'existing@example.com',
-        password: 'password123',
-        firstName: 'John',
-        lastName: 'Doe',
-      };
-
-      // TODO: Implement
-      // await expect(userService.register(dto)).rejects.toThrow('Email already exists');
       
-      expect(true).toBe(true); // Placeholder
+      expect(
+        UserService.login(
+          { email: "test@example.com", password: "password123" },
+          mockUserRepo,
+          mockTokenRepo,
+          mockJwt
+        )
+      ).rejects.toThrow();
     });
 
-    test('should hash password before storing', async () => {
-      const dto = {
-        email: 'test@example.com',
-        password: 'plaintext',
-        firstName: 'John',
-        lastName: 'Doe',
-      };
-
-      // TODO: Implement
-      // await userService.register(dto);
-      // const createCall = mockUnitOfWork.users.create.mock.calls[0][0];
-      // expect(createCall.passwordHash).not.toBe('plaintext');
-      
-      expect(true).toBe(true); // Placeholder
-    });
-  });
-
-  describe('login', () => {
-    test('should return user on valid credentials', async () => {
-      // TODO: Implement
-      expect(true).toBe(true); // Placeholder
+    test("should return error on invalid password", async () => {
+      expect(
+        UserService.login(
+          { email: "test@example.com", password: "wrong" },
+          mockUserRepo,
+          mockTokenRepo,
+          mockJwt
+        )
+      ).rejects.toThrow();
     });
 
-    test('should return null on invalid password', async () => {
-      // TODO: Implement
-      expect(true).toBe(true); // Placeholder
-    });
-
-    test('should return null on non-existent email', async () => {
-      // TODO: Implement
-      expect(true).toBe(true); // Placeholder
+    test("should return error on non-existent email", async () => {
+      expect(
+        UserService.login(
+          { email: "missing@example.com", password: "password123" },
+          mockUserRepo,
+          mockTokenRepo,
+          mockJwt
+        )
+      ).rejects.toThrow();
     });
   });
 });

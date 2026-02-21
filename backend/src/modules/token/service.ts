@@ -26,6 +26,7 @@ import type { TokenModel } from "./model";
 import { jwtConfig } from "../../shared/config/jwt.config";
 import { TokenUtil } from "../../shared/utils/token.util";
 import { ApiError, ErrorCode } from "../../shared/responses";
+import crypto from 'crypto';
 
 export abstract class RefreshTokenService {
   /**
@@ -40,10 +41,13 @@ export abstract class RefreshTokenService {
     tokenRepo: RefreshTokenRepository,
   ): Promise<TokenModel.TokenPairResponse> {
     const now = Math.floor(Date.now() / 1000);
+    const jtiAccess = crypto.randomUUID();
+    const jtiRefresh = crypto.randomUUID();
 
     // Generate access token (short-lived)
     const accessToken = await jwt.sign({
       sub: userId,
+      jti: jtiAccess,
       type: "access",
       exp: now + jwtConfig.accessToken.expiresIn,
     });
@@ -51,6 +55,7 @@ export abstract class RefreshTokenService {
     // Generate refresh token (long-lived)
     const refreshToken = await jwt.sign({
       sub: userId,
+      jti: jtiRefresh,
       type: "refresh",
       exp: now + jwtConfig.refreshToken.expiresIn,
     });

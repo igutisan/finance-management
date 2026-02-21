@@ -6,12 +6,12 @@ A modern REST API for budget and financial management built with **Elysia** (Bun
 
 This project follows a **Layered Architecture** pattern with clear separation of concerns:
 
-- **Entities**: Domain models
-- **DTOs**: Request/Response data transfer objects
-- **Repositories**: Data access with Unit of Work pattern
-- **Services**: Business logic layer
-- **Controllers**: HTTP request handling
-- **Config**: Singleton configuration management
+- **Entities/Schema**: Drizzle ORM schemas matching database
+- **DTOs**: Request/Response typing and validation with Elysia t/TypeBox
+- **Repositories**: Data access layer
+- **Services**: Business logic layer (static methods injecting repositories)
+- **Controllers**: Elysia HTTP request routes and plugins
+- **Config**: Environment and database connection management
 
 📚 **[Full Architecture Documentation](./app/src/docs/ARCHITECTURE.md)**
 
@@ -118,17 +118,19 @@ bun test tests/e2e/
 - `PATCH /users/:id` - Update user
 - `DELETE /users/:id` - Delete user (soft delete)
 
+### Swagger Documentation
+- `GET /swagger` - Interactive API documentation
+
 ### Budgets
-- `POST /budgets` - Create budget
-- `GET /budgets` - Get all user budgets
-- `GET /budgets/:id` - Get budget by ID
-- `GET /budgets/:id/summary` - Get budget summary
+- `POST /budgets` - Create budget (automatically generates budget periods)
+- `GET /budgets` - Get all user budgets (with pagination & period filtering)
+- `GET /budgets/:id` - Get budget details by ID
 - `PATCH /budgets/:id` - Update budget
 - `DELETE /budgets/:id` - Delete budget
 
 ### Movements
-- `POST /movements` - Create movement
-- `GET /movements` - Get all user movements
+- `POST /movements` - Create movement (automatically links to active budget period)
+- `GET /movements` - Get movements (with pagination & filters)
 - `GET /movements/:id` - Get movement by ID
 - `GET /movements/analytics` - Get user analytics
 - `PATCH /movements/:id` - Update movement
@@ -136,10 +138,9 @@ bun test tests/e2e/
 
 ## 🎯 Design Patterns
 
-- **Repository Pattern**: Abstracts data access
-- **Unit of Work Pattern**: Manages transactions
-- **Singleton Pattern**: Single config/DB instances
-- **DTO Pattern**: Separates API contracts from domain
+- **Repository Pattern**: Abstracts data access using Drizzle ORM
+- **Service Pattern**: Static business logic methods, completely isolated for testing
+- **DTO Pattern**: Validates all incoming/outgoing payloads automatically via Elysia Schema
 
 ## 🛠️ Technology Stack
 
@@ -161,23 +162,17 @@ Key variables:
 
 ## 📝 Development Status
 
-**Current Status**: ✅ Boilerplate Complete
+**Current Status**: ✅ Fully Implemented API Backend
 
-This is a complete boilerplate with:
-- ✅ Layered architecture structure
-- ✅ All design patterns implemented (interfaces)
-- ✅ Comprehensive documentation
-- ✅ Test structure (TDD ready)
-- ✅ Docker configuration
-- ⏳ Implementation pending (marked with TODO)
-
-**Next Steps:**
-1. Implement database client (pg or bun-postgres)
-2. Complete repository implementations
-3. Add authentication & JWT handling
-4. Implement password hashing
-5. Write actual tests
-6. Add API documentation (OpenAPI/Swagger)
+The backend includes:
+- ✅ Robust Layered architecture structure
+- ✅ JWT Authentication & Refresh Token Rotation
+- ✅ Argon2 Password Hashing
+- ✅ Sophisticated recurring budgeting system with periods
+- ✅ Complex financial analytics and movement matching
+- ✅ 100% Core Test coverage (TDD)
+- ✅ Auto-generated Swagger Documentation
+- ✅ Dockerized PostgreSQL 16 Integration using Drizzle ORM
 
 ## 🤝 Contributing
 

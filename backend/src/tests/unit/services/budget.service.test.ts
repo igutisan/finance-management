@@ -57,8 +57,7 @@ describe("BudgetService", () => {
           id,
           userId: "user-1",
           name: data.name || "Updated Budget",
-          amount: data.amount || "1000",
-          recurrence: "MONTHLY",
+          recurrence: data.recurrence || "MONTHLY",
           currency: "USD",
           isActive: data.isActive !== undefined ? data.isActive : true,
           createdAt: new Date(),
@@ -160,7 +159,7 @@ describe("BudgetService", () => {
       );
 
       expect(result.budget.name).toBe("Food Budget");
-      expect(result.budget.amount).toBe("500");
+      expect(result.periods[0].amount).toBe("500");
       expect(result.budget.recurrence).toBe("MONTHLY");
       expect(result.periods).toHaveLength(12);
       expect(mockPeriodRepo.createMany).toHaveBeenCalledTimes(1);
@@ -295,7 +294,7 @@ describe("BudgetService", () => {
 
       expect(result.currentPeriod).toBeNull();
       expect(result.totalSpent).toBe(0);
-      expect(result.remaining).toBe(1000);
+      expect(result.remaining).toBe(0);
     });
 
     it("should throw FORBIDDEN if budget does not belong to user", async () => {
@@ -359,6 +358,7 @@ describe("BudgetService", () => {
       const result = await BudgetService.getPeriods(
         "budget-1",
         "user-1",
+        {},
         mockBudgetRepo,
         periodRepoOverride
       );
@@ -460,27 +460,16 @@ describe("BudgetService", () => {
   });
 
   describe("update", () => {
-    it("should update budget name and amount", async () => {
+    it("should update budget name", async () => {
       const result = await BudgetService.update(
         "budget-1",
         "user-1",
-        { name: "New Name", amount: "1500" },
+        { name: "New Name", recurrence: "WEEKLY" },
         mockBudgetRepo
       );
 
       expect(result.name).toBe("New Name");
-      expect(result.amount).toBe("1500");
-    });
-
-    it("should throw INVALID_AMOUNT for negative amount", async () => {
-      expect(
-        BudgetService.update(
-          "budget-1",
-          "user-1",
-          { amount: "-100" },
-          mockBudgetRepo
-        )
-      ).rejects.toThrow(ApiError);
+      expect(result.recurrence).toBe("WEEKLY");
     });
   });
 

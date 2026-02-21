@@ -47,7 +47,6 @@ export const budgets = pgTable('budgets', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 200 }).notNull(),
   description: text('description'),
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   recurrence: recurrenceTypeEnum('recurrence').default('NONE').notNull(),
   currency: varchar('currency', { length: 3 }).default('USD').notNull(),
   isActive: boolean('is_active').default(true).notNull(),

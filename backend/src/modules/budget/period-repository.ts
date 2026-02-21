@@ -133,6 +133,37 @@ export class BudgetPeriodRepository {
   }
 
   /**
+   * Update the amount for the current and all future periods of a budget
+   */
+  async updateFuturePeriodsAmount(budgetId: string, amount: string): Promise<void> {
+    const today = new Date().toISOString().split('T')[0];
+    await this.db
+      .update(budgetPeriods)
+      .set({ amount, updatedAt: new Date() })
+      .where(
+        and(
+          eq(budgetPeriods.budgetId, budgetId),
+          gte(budgetPeriods.endDate, today) // Only active and future periods
+        )
+      );
+  }
+
+  /**
+   * Update the amount for periods starting from a specific date onwards
+   */
+  async updateFuturePeriodsAmountFromDate(budgetId: string, amount: string, fromDate: string): Promise<void> {
+    await this.db
+      .update(budgetPeriods)
+      .set({ amount, updatedAt: new Date() })
+      .where(
+        and(
+          eq(budgetPeriods.budgetId, budgetId),
+          gte(budgetPeriods.startDate, fromDate)
+        )
+      );
+  }
+
+  /**
    * Get the last period for a budget (by endDate)
    * Used for extending periods
    */

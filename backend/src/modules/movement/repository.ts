@@ -53,9 +53,10 @@ export class MovementRepository {
       type?: string;
       month?: number;
       year?: number;
+      budgetId?: string;
     },
   ): Promise<{ items: MovementWithBudget[]; total: number }> {
-    const { page, limit, type, month, year } = options;
+    const { page, limit, type, month, year, budgetId } = options;
     const offset = (page - 1) * limit;
 
     // Build dynamic conditions
@@ -74,6 +75,10 @@ export class MovementRepository {
       conditions.push(gte(movements.date, startOfMonth));
       conditions.push(lte(movements.date, endOfMonth));
     }
+    
+    if (budgetId) {
+      conditions.push(eq(budgetPeriods.budgetId, budgetId));
+    }
 
     const whereClause = and(...conditions);
 
@@ -81,6 +86,7 @@ export class MovementRepository {
     const countResult = await this.db
       .select({ total: count() })
       .from(movements)
+      .leftJoin(budgetPeriods, eq(movements.periodId, budgetPeriods.id))
       .where(whereClause);
 
     const total = Number(countResult[0]?.total || 0);

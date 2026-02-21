@@ -115,6 +115,7 @@ export abstract class MovementService {
       type: options.type,
       month: options.month,
       year: options.year,
+      budgetId: options.budgetId,
     });
 
     return {

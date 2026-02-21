@@ -262,6 +262,7 @@ export abstract class BudgetService {
   static async getPeriods(
     budgetId: string,
     userId: string,
+    query: { year?: number; month?: number },
     budgetRepo: BudgetRepository,
     periodRepo: BudgetPeriodRepository,
   ): Promise<BudgetModel.PeriodResponse[]> {
@@ -273,7 +274,7 @@ export abstract class BudgetService {
       throw new ApiError(ErrorCode.FORBIDDEN);
     }
 
-    const periods = await periodRepo.findByBudgetId(budgetId);
+    const periods = await periodRepo.findByBudgetId(budgetId, query);
     return periods.map(this.toPeriodResponse);
   }
 

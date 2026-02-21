@@ -20,6 +20,13 @@ export namespace BudgetModel {
 
   export type QueryParams = typeof queryParams.static;
 
+  export const getPeriodsQueryParams = t.Object({
+    year: t.Optional(t.Numeric({ minimum: 2000, maximum: 2100 })),
+    month: t.Optional(t.Numeric({ minimum: 1, maximum: 12 })),
+  });
+
+  export type GetPeriodsQueryParams = typeof getPeriodsQueryParams.static;
+
   export const createBody = t.Object({
     name: t.String({ minLength: 1 }),
     description: t.Optional(t.String()),

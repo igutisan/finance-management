@@ -139,10 +139,11 @@ export const budget = new Elysia({ prefix: "/budgets" })
    */
   .get(
     "/:id/periods",
-    async ({ params, userId }) => {
+    async ({ params, query, userId }) => {
       const data = await BudgetService.getPeriods(
         params.id,
         userId,
+        query,
         budgetRepo,
         periodRepo,
       );
@@ -150,6 +151,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
     },
     {
       auth: true,
+      query: BudgetModel.getPeriodsQueryParams,
       response: {
         200: successSchema(t.Array(BudgetModel.periodResponse), "Periods retrieved"),
         403: errorSchema("Budget does not belong to user"),

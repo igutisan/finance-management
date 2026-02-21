@@ -24,6 +24,7 @@ export namespace MovementModel {
     ),
     month: t.Optional(t.Numeric({ minimum: 1, maximum: 12 })),
     year: t.Optional(t.Numeric({ minimum: 2000, maximum: 2100 })),
+    budgetId: t.Optional(t.String()),
   });
 
   export type QueryParams = typeof queryParams.static;

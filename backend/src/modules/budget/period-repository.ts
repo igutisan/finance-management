@@ -39,13 +39,28 @@ export class BudgetPeriodRepository {
   }
 
   /**
-   * Find all periods for a budget
+   * Find all periods for a budget (with optional year and month filters)
    */
-  async findByBudgetId(budgetId: string): Promise<BudgetPeriod[]> {
+  async findByBudgetId(
+    budgetId: string,
+    options?: { year?: number; month?: number }
+  ): Promise<BudgetPeriod[]> {
+    const conditions = [
+      eq(budgetPeriods.budgetId, budgetId)
+    ];
+
+    if (options?.year) {
+      conditions.push(sql`EXTRACT(YEAR FROM ${budgetPeriods.startDate}) = ${options.year}`);
+    }
+
+    if (options?.month) {
+      conditions.push(sql`EXTRACT(MONTH FROM ${budgetPeriods.startDate}) = ${options.month}`);
+    }
+
     return await this.db
       .select()
       .from(budgetPeriods)
-      .where(eq(budgetPeriods.budgetId, budgetId))
+      .where(and(...conditions))
       .orderBy(budgetPeriods.startDate);
   }
 
@@ -82,11 +97,17 @@ export class BudgetPeriodRepository {
   ): Promise<{ items: BudgetPeriod[]; total: number }> {
     const { page, limit } = options;
     const offset = (page - 1) * limit;
+    const today = new Date().toISOString().split('T')[0];
+
+    const whereClause = and(
+      eq(budgetPeriods.budgetId, budgetId),
+      lte(budgetPeriods.startDate, today)
+    );
 
     const items = await this.db
       .select()
       .from(budgetPeriods)
-      .where(eq(budgetPeriods.budgetId, budgetId))
+      .where(whereClause)
       .orderBy(budgetPeriods.startDate)
       .limit(limit)
       .offset(offset);
@@ -94,7 +115,7 @@ export class BudgetPeriodRepository {
     const [{ count }] = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(budgetPeriods)
-      .where(eq(budgetPeriods.budgetId, budgetId));
+      .where(whereClause);
 
     return { items, total: count };
   }

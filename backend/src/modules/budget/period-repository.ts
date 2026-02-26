@@ -4,9 +4,9 @@
  * Data access layer for budget_periods table.
  */
 
-import { eq, and, isNull, gte, lte, sql } from 'drizzle-orm';
+import { eq, and, isNull, gte, lte, sql, getTableColumns } from 'drizzle-orm';
 import type { Database } from '../../shared/db';
-import { budgetPeriods, type BudgetPeriod, type NewBudgetPeriod } from '../../shared/db/schema';
+import { budgetPeriods, movements, type BudgetPeriod, type NewBudgetPeriod } from '../../shared/db/schema';
 
 export class BudgetPeriodRepository {
   constructor(private db: Database) {}
@@ -40,11 +40,12 @@ export class BudgetPeriodRepository {
 
   /**
    * Find all periods for a budget (with optional year and month filters)
+   * Automatically joins and sums movements to provide 'spent' amount.
    */
   async findByBudgetId(
     budgetId: string,
     options?: { year?: number; month?: number }
-  ): Promise<BudgetPeriod[]> {
+  ): Promise<(BudgetPeriod & { spent: string })[]> {
     const conditions = [
       eq(budgetPeriods.budgetId, budgetId)
     ];
@@ -57,11 +58,27 @@ export class BudgetPeriodRepository {
       conditions.push(sql`EXTRACT(MONTH FROM ${budgetPeriods.startDate}) = ${options.month}`);
     }
 
-    return await this.db
-      .select()
+    // Only fetch periods that have already started
+    conditions.push(
+      sql`${budgetPeriods.startDate} <= CURRENT_DATE`
+    );
+
+    // Fetch periods with spent amount
+    const result = await this.db
+      .select({
+        ...getTableColumns(budgetPeriods),
+        spent: sql<string>`COALESCE(SUM(${movements.amount}) FILTER (WHERE ${movements.type} = 'EXPENSE' AND ${movements.deletedAt} IS NULL), '0')`,
+      })
       .from(budgetPeriods)
+      .leftJoin(
+        movements,
+        eq(budgetPeriods.id, movements.periodId)
+      )
       .where(and(...conditions))
+      .groupBy(budgetPeriods.id)
       .orderBy(budgetPeriods.startDate);
+      
+    return result;
   }
 
   /**

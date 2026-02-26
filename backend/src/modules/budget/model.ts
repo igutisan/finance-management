@@ -107,6 +107,7 @@ export namespace BudgetModel {
     budgetId: t.String(),
     startDate: t.String(),
     endDate: t.String(),
+    spent: t.String(),
     amount: t.String(),
     isActive: t.Boolean(),
     createdAt: t.Date(),

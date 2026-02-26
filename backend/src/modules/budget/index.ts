@@ -137,6 +137,7 @@ export const budget = new Elysia({ prefix: "/budgets" })
   /**
    * GET /budgets/:id/periods - Get all periods for a budget
    */
+  //http://localhost:3000/api/budgets/c3f2c2ba-41f9-40e6-a324-1cdf667e54a0/periods?year=2026
   .get(
     "/:id/periods",
     async ({ params, query, userId }) => {

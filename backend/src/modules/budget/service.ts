@@ -135,7 +135,7 @@ export abstract class BudgetService {
         recurrence: item.recurrence,
         currency: item.currency,
         isActive: item.isActive,
-        currentPeriod: item.currentPeriod,
+        currentPeriod: item.currentPeriod ? { ...item.currentPeriod, spent: String(item.totalSpent) } : null,
         totalSpent: item.totalSpent,
         remaining,
         percentageUsed,
@@ -240,7 +240,7 @@ export abstract class BudgetService {
 
     return {
       budget: this.toBudgetResponse(budget),
-      currentPeriod: this.toPeriodResponse(currentPeriod),
+      currentPeriod: this.toPeriodResponse({ ...currentPeriod, spent: String(totalSpent) }),
       totalSpent,
       remaining,
       percentageUsed,
@@ -266,6 +266,7 @@ export abstract class BudgetService {
     }
 
     const periods = await periodRepo.findByBudgetId(budgetId, query);
+    
     return periods.map(this.toPeriodResponse);
   }
 
@@ -396,12 +397,13 @@ export abstract class BudgetService {
   /**
    * Transform BudgetPeriod entity to response DTO
    */
-  private static toPeriodResponse(period: BudgetPeriod): BudgetModel.PeriodResponse {
+  private static toPeriodResponse(period: BudgetPeriod & { spent?: string }): BudgetModel.PeriodResponse {
     return {
       id: period.id,
       budgetId: period.budgetId,
       startDate: period.startDate,
       endDate: period.endDate,
+      spent: period.spent ?? "0",
       amount: period.amount,
       isActive: period.isActive,
       createdAt: period.createdAt,

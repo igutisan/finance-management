@@ -17,7 +17,20 @@ export namespace UserModel {
     email: t.String({ format: "email" }),
     password: t.String({ minLength: 8 }),
     firstName: t.String({ minLength: 1 }),
-    lastName: t.String({ minLength: 1 }),
+    lastName: t.String({
+      minLength: 2,
+      maxLength: 100,
+      error: "Last name must be between 2 and 100 characters",
+    }),
+    phone: t.String({
+      minLength: 5,
+      maxLength: 20,
+      error: "Phone must be a valid number length",
+    }),
+    botPin: t.Optional(t.String({
+      pattern: "^\\d{6}$",
+      error: "Bot PIN must be exactly 6 digits",
+    })),
   });
 
   export type RegisterBody = typeof registerBody.static;
@@ -39,7 +52,18 @@ export namespace UserModel {
     email: t.Optional(t.String({ format: "email" })),
     password: t.Optional(t.String({ minLength: 8 })),
     firstName: t.Optional(t.String()),
-    lastName: t.Optional(t.String()),
+    lastName: t.Optional(t.String({
+      minLength: 2,
+      maxLength: 100,
+    })),
+    phone: t.Optional(t.String({
+      minLength: 5,
+      maxLength: 20,
+    })),
+    botPin: t.Optional(t.String({
+      pattern: "^\\d{6}$",
+      error: "Bot PIN must be exactly 6 digits",
+    })),
     isActive: t.Optional(t.Boolean()),
   });
 
@@ -52,9 +76,10 @@ export namespace UserModel {
    */
   export const userResponse = t.Object({
     id: t.String(),
-    email: t.String(),
+    email: t.String({ format: "email" }),
     firstName: t.String(),
     lastName: t.String(),
+    phone: t.String(),
     isActive: t.Boolean(),
     emailVerified: t.Boolean(),
     createdAt: t.Date(),

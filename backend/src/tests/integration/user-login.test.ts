@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm';
 import { PasswordUtil } from '../../shared/utils/password.util';
 
 describe('UC-002: User Login', () => {
-  let app: Elysia;
+  let app: any;
   let testUserId: string;
 
   beforeAll(async () => {
@@ -26,6 +26,7 @@ describe('UC-002: User Login', () => {
       passwordHash,
       firstName: 'Juan',
       lastName: 'Pérez',
+      phone: "+1234567890",
     }).returning();
 
     testUserId = result[0].id;

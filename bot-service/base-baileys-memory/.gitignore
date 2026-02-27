@@ -1,0 +1,24 @@
+# Node & Dependencies
+node_modules/
+
+# Enviroment variables
+.env
+.env.*
+!.env.example
+
+# Bot generated files & Sessions
+bot_sessions/
+*.log
+*.qr.png
+
+# IDEs & OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.suo
+
+# Temporary files
+tmp/
+coverage/
+.nyc_output/

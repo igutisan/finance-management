@@ -18,6 +18,8 @@ export const users = pgTable('users', {
   passwordHash: varchar('password_hash', { length: 255 }).notNull(),
   firstName: varchar('first_name', { length: 100 }).notNull(),
   lastName: varchar('last_name', { length: 100 }).notNull(),
+  phone: varchar('phone', { length: 20 }).notNull(),
+  botPin: varchar('bot_pin', { length: 255 }), // Nullable, stores Argon2 hash if provided
   isActive: boolean('is_active').default(true).notNull(),
   emailVerified: boolean('email_verified').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

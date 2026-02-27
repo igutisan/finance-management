@@ -8,6 +8,13 @@
       "when": 1770839222226,
       "tag": "0000_tranquil_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772208522893,
+      "tag": "0001_quick_rockslide",
+      "breakpoints": true
     }
   ]
 }

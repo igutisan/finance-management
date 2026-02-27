@@ -7,14 +7,15 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
-import { user } from '../../modules/user';
-import { db } from '../../shared/db';
-import { users } from '../../shared/db/schema';
-import { eq } from 'drizzle-orm';
+import { db } from "../../shared/db";
+import { users } from "../../shared/db/schema";
+import { eq } from "drizzle-orm";
+import { PasswordUtil } from "../../shared/utils/password.util";
+import { user } from "../../modules/user";
 import { Elysia } from 'elysia';
 
 describe('UC-001: User Registration', () => {
-  let app: Elysia;
+  let app: any;
 
   beforeAll(() => {
     app = new Elysia().use(user);
@@ -23,11 +24,13 @@ describe('UC-001: User Registration', () => {
   beforeEach(async () => {
     await db.delete(users).where(eq(users.email, 'usuario@example.com'));
     await db.delete(users).where(eq(users.email, 'deleted@example.com'));
+    await db.delete(users).where(eq(users.email, 'login-test@example.com'));
   });
 
   afterAll(async () => {
     await db.delete(users).where(eq(users.email, 'usuario@example.com'));
     await db.delete(users).where(eq(users.email, 'deleted@example.com'));
+    await db.delete(users).where(eq(users.email, 'login-test@example.com'));
   });
 
   describe('Flujo Principal: Registro Exitoso', () => {
@@ -37,6 +40,7 @@ describe('UC-001: User Registration', () => {
         password: 'SecurePass123!',
         firstName: 'Juan',
         lastName: 'Pérez',
+        phone: '1234567890',
       };
 
       const response = await app.handle(
@@ -67,6 +71,7 @@ describe('UC-001: User Registration', () => {
         password: 'SecurePass123!',
         firstName: 'Juan',
         lastName: 'Pérez',
+        phone: '1234567890',
       };
 
       const response = await app.handle(
@@ -95,6 +100,7 @@ describe('UC-001: User Registration', () => {
         password: 'SecurePass123!',
         firstName: 'Juan',
         lastName: 'Pérez',
+        phone: '1234567890',
       };
 
       const response = await app.handle(
@@ -122,9 +128,10 @@ describe('UC-001: User Registration', () => {
     it('should return 409 when email exists and is active', async () => {
       await db.insert(users).values({
         email: 'usuario@example.com',
-        passwordHash: 'existing-hash',
-        firstName: 'Existing',
-        lastName: 'User',
+        passwordHash: await PasswordUtil.hash("oldPassword123!"),
+        firstName: "To Be Reactivated",
+        lastName: "User",
+        phone: "9999999999",
       });
 
       const requestBody = {
@@ -132,6 +139,7 @@ describe('UC-001: User Registration', () => {
         password: 'SecurePass123!',
         firstName: 'Juan',
         lastName: 'Pérez',
+        phone: '1234567890',
       };
 
       const response = await app.handle(
@@ -142,23 +150,27 @@ describe('UC-001: User Registration', () => {
         })
       );
 
+      const raw = await response.text();
+      console.log('Conflict Error Body:', raw);
       expect(response.status).toBe(409);
     });
 
     it('should allow registration when email exists but is deleted', async () => {
       await db.insert(users).values({
         email: 'deleted@example.com',
-        passwordHash: 'deleted-hash',
-        firstName: 'Deleted',
-        lastName: 'User',
-        deletedAt: new Date(),
+        passwordHash: await PasswordUtil.hash("loginPassword123!"),
+        firstName: "Login",
+        lastName: "Test",
+        phone: "9876543210",
+        deletedAt: new Date()
       });
 
       const requestBody = {
         email: 'deleted@example.com',
-        password: 'SecurePass123!',
-        firstName: 'Juan',
-        lastName: 'Pérez',
+        password: 'newPassword123!',
+        firstName: 'Reactivated',
+        lastName: 'User',
+        phone: '1234567890',
       };
 
       const response = await app.handle(
@@ -203,10 +215,11 @@ describe('UC-001: User Registration', () => {
   describe('Postcondiciones', () => {
     it('should allow user to login after successful registration', async () => {
       const registerBody = {
-        email: 'usuario@example.com',
-        password: 'SecurePass123!',
-        firstName: 'Juan',
-        lastName: 'Pérez',
+        email: 'login-test@example.com',
+        password: 'loginPassword123!',
+        firstName: 'Login',
+        lastName: 'Test',
+        phone: "5555555555",
       };
 
       await app.handle(
@@ -217,7 +230,7 @@ describe('UC-001: User Registration', () => {
         })
       );
 
-      const loginBody = { email: 'usuario@example.com', password: 'SecurePass123!' };
+      const loginBody = { email: 'login-test@example.com', password: 'loginPassword123!' };
       const loginResponse = await app.handle(
         new Request('http://localhost/users/login', {
           method: 'POST',
@@ -228,7 +241,7 @@ describe('UC-001: User Registration', () => {
 
       expect(loginResponse.status).toBe(200);
       const loginEnvelope = await loginResponse.json();
-      expect(loginEnvelope.data.user.email).toBe('usuario@example.com');
+      expect(loginEnvelope.data.user.email).toBe('login-test@example.com');
     });
   });
 });

@@ -24,6 +24,8 @@ describe("UserService", () => {
           passwordHash: data.passwordHash,
           firstName: data.firstName,
           lastName: data.lastName,
+          phone: data.phone,
+          botPin: data.botPin || null,
           isActive: true,
           emailVerified: false,
           createdAt: new Date(),
@@ -43,6 +45,8 @@ describe("UserService", () => {
           passwordHash: data.passwordHash || "hashed_password",
           firstName: data.firstName || "John",
           lastName: data.lastName || "Doe",
+          phone: data.phone || "+1234567890",
+          botPin: data.botPin || null,
           isActive: true,
           emailVerified: false,
           createdAt: new Date(),
@@ -58,6 +62,8 @@ describe("UserService", () => {
           passwordHash: data.passwordHash || "hashed_password",
           firstName: data.firstName || "John",
           lastName: data.lastName || "Doe",
+          phone: data.phone || "+1234567890",
+          botPin: data.botPin || null,
           isActive: true,
           emailVerified: false,
           deletedAt: null,
@@ -83,10 +89,12 @@ describe("UserService", () => {
         password: "password123",
         firstName: "John",
         lastName: "Doe",
+        phone: "+123456789",
       };
-
       const result = await UserService.register(dto, mockUserRepo);
+
       expect(result.email).toBe(dto.email);
+      expect(result.phone).toBe(dto.phone);
       expect(mockUserRepo.create).toHaveBeenCalledTimes(1);
     });
 
@@ -94,12 +102,12 @@ describe("UserService", () => {
       mockUserRepo.emailExists = mock(() => Promise.resolve(true));
 
       const dto = {
-        email: "existing@example.com",
+        email: "deleted@example.com",
         password: "password123",
-        firstName: "John",
-        lastName: "Doe",
+        firstName: "Jane",
+        lastName: "Smith",
+        phone: "+5555555",
       };
-
       expect(UserService.register(dto, mockUserRepo)).rejects.toThrow();
     });
 
@@ -109,6 +117,7 @@ describe("UserService", () => {
         password: "plaintext",
         firstName: "John",
         lastName: "Doe",
+        phone: "+999999999",
       };
 
       await UserService.register(dto, mockUserRepo);

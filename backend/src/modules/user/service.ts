@@ -39,10 +39,14 @@ export abstract class UserService {
     // to avoid unique constraint violations.
     const deletedUser = await userRepo.findByEmailIncludeDeleted(data.email);
     if (deletedUser && deletedUser.deletedAt !== null) {
+      const hashedBotPin = data.botPin ? await PasswordUtil.hash(data.botPin) : null;
+
       const restored = await userRepo.restore(deletedUser.id, {
         passwordHash: hashedPassword,
         firstName: data.firstName,
         lastName: data.lastName,
+        phone: data.phone,
+        botPin: hashedBotPin,
         deletedAt: null,
         isActive: true,
         emailVerified: false,
@@ -55,6 +59,8 @@ export abstract class UserService {
       passwordHash: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
+      phone: data.phone,
+      botPin: data.botPin ? await PasswordUtil.hash(data.botPin) : null,
     });
 
     return this.toUserResponse(user);
@@ -128,6 +134,11 @@ export abstract class UserService {
       delete updateData.password;
     }
 
+    // If botPin is being updated, hash it too
+    if (data.botPin) {
+      updateData.botPin = await PasswordUtil.hash(data.botPin);
+    }
+
     const user = await userRepo.update(id, updateData);
     if (!user) {
       throw new ApiError(ErrorCode.USER_NOT_FOUND);
@@ -157,6 +168,7 @@ export abstract class UserService {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      phone: user.phone,
       isActive: user.isActive,
       emailVerified: user.emailVerified,
       createdAt: user.createdAt,

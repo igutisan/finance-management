@@ -22,6 +22,7 @@ describe('RefreshTokenRepository', () => {
       passwordHash: 'hash',
       firstName: 'Token',
       lastName: 'Test',
+      phone: '+1111111111',
     }).returning();
     
     testUserId = result[0].id;
@@ -51,8 +52,6 @@ describe('RefreshTokenRepository', () => {
         userId: testUserId,
         tokenHash,
         expiresAt,
-        ipAddress: '192.168.1.1',
-        userAgent: 'Test Agent',
       });
 
       // Assert

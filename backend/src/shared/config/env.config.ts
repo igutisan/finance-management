@@ -19,6 +19,9 @@ interface EnvConfig {
   
   // Security
   JWT_SECRET: string;
+
+  // Bot
+  BOT_API_KEY: string;
 }
 
 class EnvironmentConfiguration {
@@ -57,6 +60,9 @@ class EnvironmentConfiguration {
 
       // Security
       JWT_SECRET: process.env.JWT_SECRET ?? 'change-me-in-production',
+
+      // Bot
+      BOT_API_KEY: process.env.BOT_API_KEY ?? 'change-me-bot-key',
     };
   }
 

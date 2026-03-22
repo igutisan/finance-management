@@ -25,6 +25,7 @@ export enum ErrorCode {
   // ===== User =====
   USER_NOT_FOUND = "USER_NOT_FOUND",
   EMAIL_ALREADY_EXISTS = "EMAIL_ALREADY_EXISTS",
+  PHONE_ALREADY_EXISTS = "PHONE_ALREADY_EXISTS",
 
   // ===== Budget =====
   BUDGET_NOT_FOUND = "BUDGET_NOT_FOUND",
@@ -34,6 +35,12 @@ export enum ErrorCode {
   // ===== Movement =====
   MOVEMENT_NOT_FOUND = "MOVEMENT_NOT_FOUND",
   BUDGET_OWNERSHIP = "BUDGET_OWNERSHIP",
+
+  // ===== Bot =====
+  BOT_API_KEY_INVALID = "BOT_API_KEY_INVALID",
+  BOT_PIN_INVALID = "BOT_PIN_INVALID",
+  BOT_PIN_NOT_SET = "BOT_PIN_NOT_SET",
+  PHONE_NOT_FOUND = "PHONE_NOT_FOUND",
 }
 
 /**
@@ -105,6 +112,10 @@ export const ErrorDefaults: Record<
     status: 409,
     message: "Email already exists",
   },
+  [ErrorCode.PHONE_ALREADY_EXISTS]: {
+    status: 409,
+    message: "Phone number is already registered",
+  },
 
   // Budget
   [ErrorCode.BUDGET_NOT_FOUND]: {
@@ -128,5 +139,23 @@ export const ErrorDefaults: Record<
   [ErrorCode.BUDGET_OWNERSHIP]: {
     status: 403,
     message: "Budget does not belong to user",
+  },
+
+  // Bot
+  [ErrorCode.BOT_API_KEY_INVALID]: {
+    status: 401,
+    message: "Invalid bot API key",
+  },
+  [ErrorCode.BOT_PIN_INVALID]: {
+    status: 401,
+    message: "Invalid bot PIN",
+  },
+  [ErrorCode.BOT_PIN_NOT_SET]: {
+    status: 400,
+    message: "Bot PIN has not been configured for this user",
+  },
+  [ErrorCode.PHONE_NOT_FOUND]: {
+    status: 404,
+    message: "No user found with this phone number",
   },
 };

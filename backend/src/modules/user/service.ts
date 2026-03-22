@@ -28,9 +28,18 @@ export abstract class UserService {
     data: UserModel.RegisterBody,
     userRepo: UserRepository,
   ): Promise<UserModel.UserResponse> {
+    
+    const normalizedPhone = this.normalizePhone(data.phone);
+
     const emailExist = await userRepo.emailExists(data.email);
     if (emailExist) {
       throw new ApiError(ErrorCode.EMAIL_ALREADY_EXISTS);
+    }
+
+    // Ensure no active user already owns this phone number
+    const phoneExist = await userRepo.findByPhone(normalizedPhone);
+    if (phoneExist) {
+      throw new ApiError(ErrorCode.PHONE_ALREADY_EXISTS);
     }
 
     const hashedPassword = await PasswordUtil.hash(data.password);
@@ -45,7 +54,7 @@ export abstract class UserService {
         passwordHash: hashedPassword,
         firstName: data.firstName,
         lastName: data.lastName,
-        phone: data.phone,
+        phone: normalizedPhone,
         botPin: hashedBotPin,
         deletedAt: null,
         isActive: true,
@@ -59,7 +68,7 @@ export abstract class UserService {
       passwordHash: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
-      phone: data.phone,
+      phone: normalizedPhone,
       botPin: data.botPin ? await PasswordUtil.hash(data.botPin) : null,
     });
 
@@ -157,6 +166,15 @@ export abstract class UserService {
     }
 
     return true;
+  }
+
+  /**
+   * Normalize phone number: strip leading '+' and surrounding whitespace.
+   * Baileys sends numbers as '573001234567', but users may register with '+573001234567'.
+   * Storing without '+' ensures consistent lookups.
+   */
+  private static normalizePhone(phone: string): string {
+    return phone.trim().replace(/^\+/, '');
   }
 
   /**

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+
+# Bot sessions & generated files
+bot_sessions/
+*.log
+*.qr.png
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Temporary
+tmp/
+coverage/
+.nyc_output/
+
+# Git
+.git/
+.gitignore

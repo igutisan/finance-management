@@ -13,11 +13,12 @@
         "@bot-whatsapp/bot": "latest",
         "@bot-whatsapp/cli": "latest",
         "@bot-whatsapp/database": "latest",
-        "@bot-whatsapp/provider": "latest",
         "@bot-whatsapp/portal": "latest",
+        "@bot-whatsapp/provider": "latest",
+        "@google/genai": "^1.43.0",
         "@whiskeysockets/baileys": "6.5.0",
-        "wa-sticker-formatter": "4.4.4",
-        "cache-manager": "5.2.4"
+        "cache-manager": "5.2.4",
+        "wa-sticker-formatter": "4.4.4"
     },
     "devDependencies": {
         "eslint": "^10.0.2",

@@ -43,6 +43,7 @@ services:
       APP_PORT: ${APP_PORT:-3000}
       APP_ENV: ${APP_ENV:-development}
       JWT_SECRET: ${JWT_SECRET:-supersecret-change-in-production}
+      BOT_API_KEY: ${BOT_API_KEY:-change-me-bot-key}
     ports:
       - "${APP_PORT:-3000}:${APP_PORT:-3000}"
     volumes:
@@ -87,7 +88,32 @@ services:
     networks:
       - budget-network
 
+  # WhatsApp Bot Service (Baileys + Gemini AI)
+  bot-service:
+    build:
+      context: ./bot-service/base-baileys-memory
+      dockerfile: Dockerfile
+      target: development
+    container_name: budget-bot
+    restart: unless-stopped
+    depends_on:
+      - backend
+    env_file:
+      - ./bot-service/base-baileys-memory/.env
+    ports:
+      - "${BOT_PORT:-3002}:3002"
+    volumes:
+      # Mount source for hot reload
+      - ./bot-service/base-baileys-memory/src:/app/src:ro
+      - ./bot-service/base-baileys-memory/app.js:/app/app.js:ro
+      # Persist bot sessions between restarts
+      - bot_sessions:/app/bot_sessions
+    networks:
+      - budget-network
+
 volumes:
+  bot_sessions:
+    name: budget_bot_sessions
   postgres_data:
     name: budget_postgres_data
 

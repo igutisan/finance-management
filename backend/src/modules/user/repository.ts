@@ -22,6 +22,16 @@ export class UserRepository {
     return result[0] || null;
   }
 
+  async findByPhone(phone: string): Promise<User | null> {
+    const result = await this.db
+      .select()
+      .from(users)
+      .where(and(eq(users.phone, phone), isNull(users.deletedAt)))
+      .limit(1);
+
+    return result[0] || null;
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     const result = await this.db
       .select()

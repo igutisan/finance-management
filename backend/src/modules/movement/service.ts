@@ -75,6 +75,8 @@ export abstract class MovementService {
       tags: data.tags || [],
     });
 
+    console.log("Movement created:", movement);
+
     return this.toMovementResponse(movement);
   }
 
@@ -247,7 +249,7 @@ export abstract class MovementService {
       date: movement.date,
       paymentMethod: movement.paymentMethod,
       isRecurring: movement.isRecurring,
-      budgetName: movement.budgetName,
+      budgetName: movement?.budgetName || "",
       tags: movement.tags,
       createdAt: movement.createdAt,
       updatedAt: movement.updatedAt,

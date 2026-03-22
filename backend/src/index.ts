@@ -12,6 +12,7 @@ import { user } from "./modules/user";
 import { budget } from "./modules/budget";
 import { movement } from "./modules/movement";
 import { token } from "./modules/token";
+import { bot } from "./modules/bot";
 import { errorHandler } from "./shared/plugins";
 
 const app = new Elysia()
@@ -52,6 +53,7 @@ const app = new Elysia()
       .use(budget)
       .use(movement)
       .use(token)
+      .use(bot)
   )
 
   .listen(process.env.APP_PORT || 3002);
